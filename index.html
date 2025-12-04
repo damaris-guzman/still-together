@@ -1,1 +1,694 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>still together</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            font-family: 'VT323', 'Courier New', monospace;
+            background: #000;
+            cursor: crosshair;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated;
+            filter: contrast(1.1) brightness(0.95);
+        }
+        
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .instruction-text {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 20px;
+            text-align: center;
+            max-width: 800px;
+            line-height: 1.4;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            letter-spacing: 2px;
+        }
+        
+        .contradiction {
+            text-decoration: line-through;
+            color: #ff0066;
+            animation: glitch-text 0.5s infinite;
+        }
+        
+        @keyframes glitch-text {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; text-shadow: 2px 0 #00ff00, -2px 0 #ff00ff; }
+        }
+        
+        .puzzle-counter {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 24px;
+            letter-spacing: 3px;
+        }
+        
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 150px rgba(0, 0, 0, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div class="puzzle-counter" id="puzzleCounter">0 / 5</div>
+        <div class="vignette"></div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // GAME STATE
+        // ============================================
+        
+        const gameState = {
+            puzzlesSolved: 0,
+            totalPuzzles: 5
+        };
+        
+        // ============================================
+        // THREE.JS SETUP - LOW POLY AESTHETIC
+        // ============================================
+        
+        let scene, camera, renderer;
+        let puzzleObjects = [];
+        let clock = new THREE.Clock();
+        
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            scene.fog = new THREE.Fog(0x0a0a0a, 8, 25);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 8);
+            
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('gameCanvas'),
+                antialias: false  // Low-poly aesthetic
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            
+            // Liminal lighting - cold, fluorescent, unsettling
+            const ambientLight = new THREE.AmbientLight(0x4a4a4a, 0.4);
+            scene.add(ambientLight);
+            
+            const keyLight = new THREE.DirectionalLight(0xc9d1d9, 0.8);
+            keyLight.position.set(5, 10, 5);
+            scene.add(keyLight);
+            
+            const fillLight = new THREE.DirectionalLight(0x7a8a99, 0.3);
+            fillLight.position.set(-5, 3, -5);
+            scene.add(fillLight);
+            
+            // Eerie back glow
+            const backLight = new THREE.PointLight(0xff00ff, 0.3, 20);
+            backLight.position.set(0, 2, -10);
+            scene.add(backLight);
+            
+            createRoom();
+            createPuzzles();
+            setupControls();
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        // ============================================
+        // LIMINAL ROOM - NET ART AESTHETIC
+        // ============================================
+        
+        function createRoom() {
+            // Floor - grid pattern for net-art vibe
+            const floorGeometry = new THREE.PlaneGeometry(30, 30, 20, 20);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x1a1a1a,
+                roughness: 0.9,
+                metalness: 0.1,
+                wireframe: false,
+                flatShading: true
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0;
+            scene.add(floor);
+            
+            // Walls - minimal, liminal
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x2a2a2a,
+                roughness: 1,
+                flatShading: true
+            });
+            
+            // Back wall
+            const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 6), wallMaterial);
+            backWall.position.set(0, 3, -15);
+            scene.add(backWall);
+            
+            // Side walls
+            const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 6), wallMaterial);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-15, 3, 0);
+            scene.add(leftWall);
+            
+            const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 6), wallMaterial);
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.set(15, 3, 0);
+            scene.add(rightWall);
+            
+            // Ceiling
+            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), wallMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 6;
+            scene.add(ceiling);
+            
+            // Add some liminal pillars
+            const pillarGeometry = new THREE.CylinderGeometry(0.3, 0.3, 6, 6);
+            const pillarMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x3a3a3a,
+                flatShading: true
+            });
+            
+            const pillarPositions = [
+                [-8, 3, -8],
+                [8, 3, -8],
+                [-8, 3, 8],
+                [8, 3, 8]
+            ];
+            
+            pillarPositions.forEach(pos => {
+                const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+                pillar.position.set(...pos);
+                scene.add(pillar);
+            });
+        }
+        
+        // ============================================
+        // PHASE 1: DELUSIONAL LOGIC PUZZLES
+        // ============================================
+        
+        function createPuzzles() {
+            const puzzleConfigs = [
+                // Puzzle 1: Object that wakes up when looked at
+                {
+                    type: 'wakeup',
+                    position: [-6, 1.5, -5],
+                    geometry: new THREE.TetrahedronGeometry(0.8, 0),
+                    color: 0xff3366,
+                    symbol: '⚡'
+                },
+                // Puzzle 2: Symbols that rearrange when you look away
+                {
+                    type: 'rearrange',
+                    position: [6, 1.5, -5],
+                    geometry: new THREE.OctahedronGeometry(0.8, 0),
+                    color: 0x33ffcc,
+                    symbol: '◉'
+                },
+                // Puzzle 3: Contradictory instructions
+                {
+                    type: 'contradiction',
+                    position: [0, 1.5, -10],
+                    geometry: new THREE.IcosahedronGeometry(0.8, 0),
+                    color: 0xffcc33,
+                    symbol: '⚠'
+                },
+                // Puzzle 4: Self-resolving puzzle
+                {
+                    type: 'selfresolve',
+                    position: [6, 1.5, 2],
+                    geometry: new THREE.DodecahedronGeometry(0.8, 0),
+                    color: 0x66ff33,
+                    symbol: '∞'
+                },
+                // Puzzle 5: Repeating numbers
+                {
+                    type: 'numbers',
+                    position: [-6, 1.5, 2],
+                    geometry: new THREE.BoxGeometry(1.2, 1.2, 1.2),
+                    color: 0xff66cc,
+                    symbol: '7'
+                }
+            ];
+            
+            puzzleConfigs.forEach((config, index) => {
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: config.color,
+                    emissive: config.color,
+                    emissiveIntensity: 0.1,
+                    flatShading: true,
+                    roughness: 0.7,
+                    metalness: 0.3
+                });
+                
+                const mesh = new THREE.Mesh(config.geometry, material);
+                mesh.position.set(...config.position);
+                
+                mesh.userData = {
+                    puzzleType: config.type,
+                    puzzleIndex: index,
+                    isAwake: false,
+                    isSolved: false,
+                    originalPosition: mesh.position.clone(),
+                    symbol: config.symbol,
+                    lookTime: 0,
+                    originalRotation: { x: 0, y: 0, z: 0 }
+                };
+                
+                scene.add(mesh);
+                puzzleObjects.push(mesh);
+            });
+            
+            showInstruction("look at the objects");
+        }
+        
+        // ============================================
+        // PUZZLE LOGIC
+        // ============================================
+        
+        function updatePuzzles(deltaTime) {
+            puzzleObjects.forEach(obj => {
+                if (obj.userData.isSolved) {
+                    // Solved puzzles slowly fade
+                    obj.material.opacity = Math.max(0.1, obj.material.opacity - deltaTime * 0.2);
+                    return;
+                }
+                
+                const isLookingAt = isPlayerLookingAt(obj);
+                
+                switch(obj.userData.puzzleType) {
+                    case 'wakeup':
+                        updateWakeUpPuzzle(obj, isLookingAt, deltaTime);
+                        break;
+                    case 'rearrange':
+                        updateRearrangePuzzle(obj, isLookingAt, deltaTime);
+                        break;
+                    case 'contradiction':
+                        updateContradictionPuzzle(obj, isLookingAt, deltaTime);
+                        break;
+                    case 'selfresolve':
+                        updateSelfResolvePuzzle(obj, deltaTime);
+                        break;
+                    case 'numbers':
+                        updateNumbersPuzzle(obj, deltaTime);
+                        break;
+                }
+            });
+        }
+        
+        function updateWakeUpPuzzle(obj, isLookingAt, deltaTime) {
+            if (isLookingAt) {
+                obj.userData.lookTime += deltaTime;
+                obj.userData.isAwake = true;
+                
+                // Pulse and glow when watched
+                const pulse = 1 + Math.sin(obj.userData.lookTime * 8) * 0.15;
+                obj.scale.set(pulse, pulse, pulse);
+                obj.material.emissiveIntensity = 0.3 + Math.sin(obj.userData.lookTime * 12) * 0.4;
+                
+                // Rotate erratically
+                obj.rotation.x += deltaTime * 2;
+                obj.rotation.y += deltaTime * 3;
+                
+                if (obj.userData.lookTime > 4) {
+                    solvePuzzle(obj, "it woke up. was it asleep?");
+                }
+            } else if (obj.userData.isAwake) {
+                // Float when not watched
+                const drift = Math.sin(Date.now() * 0.002) * 0.3;
+                obj.position.y = obj.userData.originalPosition.y + drift;
+                obj.material.emissiveIntensity = 0.1;
+            }
+        }
+        
+        function updateRearrangePuzzle(obj, isLookingAt, deltaTime) {
+            if (!isLookingAt) {
+                // Spins wildly when not watched
+                const time = Date.now() * 0.003;
+                obj.rotation.x = Math.sin(time * 1.3) * Math.PI;
+                obj.rotation.y = Math.cos(time * 1.7) * Math.PI;
+                obj.rotation.z = Math.sin(time * 2.1) * Math.PI;
+                
+                obj.material.emissiveIntensity = 0.5;
+                obj.userData.lookTime = 0;
+            } else {
+                obj.userData.lookTime += deltaTime;
+                
+                // Freezes when watched
+                if (obj.userData.lookTime > 3) {
+                    obj.rotation.set(0, 0, 0);
+                    solvePuzzle(obj, "it froze. were you supposed to see that?");
+                }
+            }
+        }
+        
+        function updateContradictionPuzzle(obj, isLookingAt, deltaTime) {
+            // Always spinning
+            obj.rotation.x += deltaTime * 0.5;
+            obj.rotation.y += deltaTime * 0.7;
+            
+            if (isLookingAt && !obj.userData.instructionShown) {
+                obj.userData.instructionShown = true;
+                showInstruction("DON'T <span class='contradiction'>LOOK AT THIS</span> LOOK AT THIS", 4000);
+                
+                setTimeout(() => {
+                    solvePuzzle(obj, "you looked. you didn't look. both. neither.");
+                }, 3000);
+            }
+        }
+        
+        function updateSelfResolvePuzzle(obj, deltaTime) {
+            obj.userData.lookTime += deltaTime;
+            
+            // Gentle float
+            obj.position.y = obj.userData.originalPosition.y + Math.sin(Date.now() * 0.001) * 0.1;
+            obj.rotation.y += deltaTime * 0.5;
+            
+            // Solves itself after 8 seconds
+            if (obj.userData.lookTime > 8 && !obj.userData.startedResolving) {
+                obj.userData.startedResolving = true;
+                
+                const startTime = Date.now();
+                const duration = 3000;
+                
+                function animateResolve() {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    const scale = 1 - progress * 0.7;
+                    obj.scale.set(scale, scale, scale);
+                    obj.material.emissiveIntensity = progress;
+                    obj.rotation.y += 0.1;
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animateResolve);
+                    } else {
+                        solvePuzzle(obj, "it solved itself. you weren't needed.");
+                    }
+                }
+                
+                animateResolve();
+            }
+        }
+        
+        function updateNumbersPuzzle(obj, deltaTime) {
+            // Numbers appear: 7, 77, 777, 7777
+            const cycle = Math.floor(Date.now() / 1500) % 5;
+            const numSevens = cycle + 1;
+            obj.userData.currentNumber = '7'.repeat(numSevens);
+            
+            // Pulse with number changes
+            const phase = (Date.now() % 1500) / 1500;
+            const pulse = 1 + Math.sin(phase * Math.PI) * 0.2;
+            obj.scale.set(pulse, pulse, pulse);
+            
+            // Rotate
+            obj.rotation.x += deltaTime * 0.3;
+            obj.rotation.y += deltaTime * 0.5;
+            
+            // Glow pulses
+            obj.material.emissiveIntensity = 0.2 + Math.sin(phase * Math.PI) * 0.3;
+            
+            if (!obj.userData.isSolved && obj.userData.lookTime > 12) {
+                solvePuzzle(obj, "seven. always seven. seven seven seven.");
+            }
+            
+            obj.userData.lookTime += deltaTime;
+        }
+        
+        function solvePuzzle(obj, message) {
+            if (obj.userData.isSolved) return;
+            
+            obj.userData.isSolved = true;
+            gameState.puzzlesSolved++;
+            
+            // Flash effect
+            obj.material.emissiveIntensity = 1;
+            obj.material.transparent = true;
+            
+            setTimeout(() => {
+                obj.material.emissiveIntensity = 0.1;
+            }, 600);
+            
+            showInstruction(message, 3000);
+            updateCounter();
+            
+            // All puzzles solved?
+            if (gameState.puzzlesSolved >= gameState.totalPuzzles) {
+                setTimeout(() => {
+                    showInstruction("you solved them all. but what did you solve?", 3000);
+                    setTimeout(() => {
+                        triggerFloorCollapse();
+                    }, 3000);
+                }, 2000);
+            }
+        }
+        
+        // ============================================
+        // PLAYER CONTROLS
+        // ============================================
+        
+        const keys = {
+            w: false,
+            a: false,
+            s: false,
+            d: false
+        };
+        
+        let mouseX = 0, mouseY = 0;
+        let isPointerLocked = false;
+        
+        function setupControls() {
+            document.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase();
+                if (keys.hasOwnProperty(key)) keys[key] = true;
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+                if (keys.hasOwnProperty(key)) keys[key] = false;
+            });
+            
+            document.addEventListener('click', () => {
+                if (!isPointerLocked) {
+                    renderer.domElement.requestPointerLock();
+                }
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === renderer.domElement;
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isPointerLocked) {
+                    mouseX += e.movementX * 0.002;
+                    mouseY += e.movementY * 0.002;
+                    mouseY = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, mouseY));
+                }
+            });
+        }
+        
+        function updatePlayer(deltaTime) {
+            // Camera rotation
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = -mouseX;
+            camera.rotation.x = -mouseY;
+            
+            // Movement
+            const speed = 4;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            
+            forward.y = 0;
+            right.y = 0;
+            forward.normalize();
+            right.normalize();
+            
+            const velocity = new THREE.Vector3();
+            if (keys.w) velocity.add(forward);
+            if (keys.s) velocity.sub(forward);
+            if (keys.d) velocity.add(right);
+            if (keys.a) velocity.sub(right);
+            
+            if (velocity.length() > 0) {
+                velocity.normalize().multiplyScalar(speed * deltaTime);
+                camera.position.add(velocity);
+            }
+            
+            // Boundaries
+            const limit = 14;
+            camera.position.x = Math.max(-limit, Math.min(limit, camera.position.x));
+            camera.position.z = Math.max(-limit, Math.min(limit, camera.position.z));
+            camera.position.y = 1.6;
+        }
+        
+        function isPlayerLookingAt(object, threshold = 0.97) {
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            
+            const toObject = new THREE.Vector3()
+                .subVectors(object.position, camera.position)
+                .normalize();
+            
+            const dot = direction.dot(toObject);
+            return dot > threshold;
+        }
+        
+        // ============================================
+        // UI HELPERS
+        // ============================================
+        
+        let currentInstruction = null;
+        
+        function showInstruction(html, duration = 0) {
+            if (currentInstruction) {
+                currentInstruction.remove();
+            }
+            
+            const instruction = document.createElement('div');
+            instruction.className = 'instruction-text';
+            instruction.innerHTML = html;
+            document.getElementById('ui-layer').appendChild(instruction);
+            currentInstruction = instruction;
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    if (currentInstruction === instruction) {
+                        instruction.style.transition = 'opacity 0.5s';
+                        instruction.style.opacity = '0';
+                        setTimeout(() => instruction.remove(), 500);
+                        currentInstruction = null;
+                    }
+                }, duration);
+            }
+        }
+        
+        function updateCounter() {
+            document.getElementById('puzzleCounter').textContent = 
+                `${gameState.puzzlesSolved} / ${gameState.totalPuzzles}`;
+        }
+        
+        // ============================================
+        // FLOOR COLLAPSE TRANSITION
+        // ============================================
+        
+        function triggerFloorCollapse() {
+            showInstruction("the floor is opening", 2000);
+            
+            const floor = scene.children.find(obj => 
+                obj.geometry instanceof THREE.PlaneGeometry && 
+                obj.rotation.x < 0
+            );
+            
+            if (floor) {
+                const startTime = Date.now();
+                const duration = 3000;
+                const originalY = floor.position.y;
+                
+                // Make everything fall
+                function animateCollapse() {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    // Floor drops
+                    floor.position.y = originalY - progress * 20;
+                    
+                    // Puzzle objects fall
+                    puzzleObjects.forEach(obj => {
+                        obj.position.y -= progress * 0.3;
+                        obj.rotation.x += 0.1;
+                        obj.rotation.y += 0.15;
+                    });
+                    
+                    // Camera shakes
+                    camera.position.y = 1.6 + Math.sin(elapsed * 0.02) * 0.3 * progress;
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animateCollapse);
+                    } else {
+                        // Fade to black then go to phase 2
+                        document.body.style.transition = 'opacity 1s';
+                        document.body.style.opacity = '0';
+                        
+                        setTimeout(() => {
+                            window.location.href = 'phase2.html';
+                        }, 1000);
+                    }
+                }
+                
+                animateCollapse();
+            }
+        }
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = clock.getDelta();
+            
+            updatePuzzles(deltaTime);
+            updatePlayer(deltaTime);
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        window.addEventListener('load', () => {
+            initThreeJS();
+            animate();
+            
+            setTimeout(() => {
+                showInstruction("click to begin. wasd to move. mouse to look.", 5000);
+            }, 500);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>still together - phase 2</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            font-family: 'VT323', 'Courier New', monospace;
+            background: #000;
+            cursor: crosshair;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated;
+            filter: contrast(1.1) brightness(0.95);
+        }
+        
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .instruction-text {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 20px;
+            text-align: center;
+            max-width: 800px;
+            line-height: 1.4;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            letter-spacing: 2px;
+        }
+        
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 150px rgba(0, 0, 0, 0.7);
+        }
+        
+        /* LIVESTREAM UI */
+        .stream-ui {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 0, 0, 0.4);
+            padding: 8px 12px;
+            font-size: 18px;
+            color: #ff3333;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px rgba(255, 0, 0, 0.7);
+        }
+        
+        .recording-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #ff0000;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .chat-container {
+            position: fixed;
+            bottom: 80px;
+            left: 20px;
+            width: 350px;
+            max-height: 300px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .chat-message {
+            background: rgba(0, 0, 0, 0.75);
+            border-left: 2px solid rgba(255, 0, 255, 0.5);
+            padding: 6px 10px;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.8);
+            letter-spacing: 0.5px;
+            animation: slideIn 0.3s ease-out;
+            word-wrap: break-word;
+        }
+        
+        .chat-message .username {
+            color: #ff00ff;
+            margin-right: 6px;
+            text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div class="vignette"></div>
+        
+        <div class="stream-ui">
+            <span class="recording-dot"></span>
+            <span id="viewCount">LIVE • 6 viewers</span>
+        </div>
+        
+        <div class="chat-container" id="chatContainer"></div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // PHASE 2 - LIVESTREAM PARANOIA
+        // ============================================
+        
+        let scene, camera, renderer;
+        let clock = new THREE.Clock();
+        let viewerCount = 6;
+        let puzzleObjects = [];
+        let gameState = {
+            puzzlesSolved: 0,
+            totalPuzzles: 5,
+            startTime: Date.now()
+        };
+        
+        const usernames = [
+            'xX_sc3ne_xX', 'luv2c0nc3al', '2bh', 'dinonugget', '2getreal', 
+            'marshasnotepad', 'w4tch1ng_u', 'gl1tch3d_0ut', 'n0_3sc4p3',
+            'f4ll1ng_th4ough', 'st1ll_h3r3', 'wh3r3_r_u', 'l0st_1n_1t',
+            'c4nt_l00k_4w4y', 'pr0c3ss1ng', 't00_r34l', 'un5ett1ed'
+        ];
+        
+        const chatMessages = [
+            "wait what is this",
+            "why are they just standing there",
+            "this is weird",
+            "i think they're lost",
+            "look at them go",
+            "they don't know we're watching",
+            "moving around randomly lol",
+            "what are they looking for",
+            "this feels wrong to watch",
+            "are they okay?",
+            "just walking in circles",
+            "they keep looking around",
+            "something's off about this",
+            "why does this feel familiar",
+            "they're trying to solve something",
+            "this doesn't make sense",
+            "getting closer to something",
+            "wait they stopped",
+            "what did they see",
+            "they're staring at it",
+            "not looking away",
+            "fixated on something",
+            "been watching for a while now",
+            "can't stop watching this",
+            "what is happening"
+        ];
+        
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            scene.fog = new THREE.Fog(0x0a0a0a, 10, 35);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 5);
+            
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('gameCanvas'),
+                antialias: false
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            
+            // Liminal lighting similar to Phase 1 but more unstable
+            const ambientLight = new THREE.AmbientLight(0x2a2a3a, 0.4);
+            scene.add(ambientLight);
+            
+            const light1 = new THREE.DirectionalLight(0xc9d1d9, 0.6);
+            light1.position.set(5, 8, 3);
+            scene.add(light1);
+            
+            const light2 = new THREE.DirectionalLight(0x7a8a99, 0.4);
+            light2.position.set(-5, 6, -3);
+            scene.add(light2);
+            
+            const eerieLight = new THREE.PointLight(0xff00ff, 0.8, 30);
+            eerieLight.position.set(0, 10, 0);
+            scene.add(eerieLight);
+            
+            createPhase2Environment();
+            setupControls();
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        function createPhase2Environment() {
+            // Slanted floor that tilts
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(40, 40, 20, 20),
+                new THREE.MeshStandardMaterial({ 
+                    color: 0x1a1a2a,
+                    flatShading: true,
+                    wireframe: false
+                })
+            );
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0;
+            floor.userData.type = 'floor';
+            floor.userData.tiltPhase = 0;
+            scene.add(floor);
+            
+            // Walls - similar to Phase 1 but darker
+            const wallGeometry = new THREE.PlaneGeometry(40, 10);
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x15151d,
+                flatShading: true,
+                side: THREE.DoubleSide
+            });
+            
+            // North wall
+            const wallN = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallN.position.set(0, 5, -20);
+            scene.add(wallN);
+            
+            // South wall
+            const wallS = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallS.position.set(0, 5, 20);
+            wallS.rotation.y = Math.PI;
+            scene.add(wallS);
+            
+            // East wall
+            const wallE = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallE.position.set(20, 5, 0);
+            wallE.rotation.y = -Math.PI / 2;
+            scene.add(wallE);
+            
+            // West wall
+            const wallW = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallW.position.set(-20, 5, 0);
+            wallW.rotation.y = Math.PI / 2;
+            scene.add(wallW);
+            
+            // Ceiling
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(40, 40),
+                new THREE.MeshStandardMaterial({ 
+                    color: 0x0a0a0f,
+                    flatShading: true
+                })
+            );
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 10;
+            scene.add(ceiling);
+            
+            // Pillars in corners (like Phase 1)
+            const pillarPositions = [
+                [-18, 5, -18], [18, 5, -18], [-18, 5, 18], [18, 5, 18]
+            ];
+            
+            pillarPositions.forEach(pos => {
+                const pillar = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.5, 10, 1.5),
+                    new THREE.MeshStandardMaterial({ 
+                        color: 0x1a1a2a,
+                        flatShading: true
+                    })
+                );
+                pillar.position.set(pos[0], pos[1], pos[2]);
+                scene.add(pillar);
+            });
+            
+            // Create puzzles similar to Phase 1
+            createDisorientingPuzzles();
+            
+            showInstruction("people are watching you", 3000);
+            setTimeout(() => {
+                showInstruction("solve the puzzles while they watch", 5000);
+            }, 3500);
+        }
+        
+        function createDisorientingPuzzles() {
+            const puzzleConfigs = [
+                { geo: new THREE.TetrahedronGeometry(1), color: 0xff6b9d, pos: [-8, 2, -8], type: 'wakeup' },
+                { geo: new THREE.OctahedronGeometry(1), color: 0x6bccff, pos: [8, 2, -8], type: 'rearrange' },
+                { geo: new THREE.IcosahedronGeometry(1), color: 0xffeb3b, pos: [8, 2, 8], type: 'contradiction' },
+                { geo: new THREE.DodecahedronGeometry(1), color: 0x4caf50, pos: [-8, 2, 8], type: 'selfresolve' },
+                { geo: new THREE.BoxGeometry(1.5, 1.5, 1.5), color: 0xff5722, pos: [0, 2, 0], type: 'numbers' }
+            ];
+            
+            puzzleConfigs.forEach(config => {
+                const material = new THREE.MeshStandardMaterial({
+                    color: config.color,
+                    flatShading: true,
+                    emissive: config.color,
+                    emissiveIntensity: 0.2
+                });
+                
+                const mesh = new THREE.Mesh(config.geo, material);
+                mesh.position.set(config.pos[0], config.pos[1], config.pos[2]);
+                
+                mesh.userData.type = config.type;
+                mesh.userData.solved = false;
+                mesh.userData.baseColor = config.color;
+                mesh.userData.watchTime = 0;
+                mesh.userData.unwatchTime = 0;
+                mesh.userData.activatedTime = 0;
+                mesh.userData.numberCycle = 0;
+                mesh.userData.lastNumberChange = Date.now();
+                
+                scene.add(mesh);
+                puzzleObjects.push(mesh);
+            });
+        }
+        
+        // ============================================
+        // CONTROLS
+        // ============================================
+        
+        const keys = { w: false, a: false, s: false, d: false };
+        let mouseX = 0, mouseY = 0;
+        let isPointerLocked = false;
+        
+        function setupControls() {
+            document.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase();
+                if (keys.hasOwnProperty(key)) keys[key] = true;
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+                if (keys.hasOwnProperty(key)) keys[key] = false;
+            });
+            
+            document.addEventListener('click', () => {
+                if (!isPointerLocked) {
+                    renderer.domElement.requestPointerLock();
+                }
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === renderer.domElement;
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isPointerLocked) {
+                    mouseX += e.movementX * 0.002;
+                    mouseY += e.movementY * 0.002;
+                    mouseY = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, mouseY));
+                }
+            });
+        }
+        
+        function updatePlayer(deltaTime) {
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = -mouseX;
+            camera.rotation.x = -mouseY;
+            
+            const speed = 4;
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            
+            forward.y = 0;
+            right.y = 0;
+            forward.normalize();
+            right.normalize();
+            
+            const velocity = new THREE.Vector3();
+            if (keys.w) velocity.add(forward);
+            if (keys.s) velocity.sub(forward);
+            if (keys.d) velocity.add(right);
+            if (keys.a) velocity.sub(right);
+            
+            if (velocity.length() > 0) {
+                velocity.normalize().multiplyScalar(speed * deltaTime);
+                camera.position.add(velocity);
+            }
+            
+            // Floor tilt pushes player
+            const floor = scene.children.find(obj => obj.userData.type === 'floor');
+            if (floor) {
+                const tiltPushX = Math.sin(floor.rotation.z) * deltaTime * 3;
+                const tiltPushZ = Math.sin(floor.rotation.x + Math.PI / 2) * deltaTime * 3;
+                camera.position.x += tiltPushX;
+                camera.position.z += tiltPushZ;
+            }
+            
+            const limit = 19;
+            camera.position.x = Math.max(-limit, Math.min(limit, camera.position.x));
+            camera.position.z = Math.max(-limit, Math.min(limit, camera.position.z));
+            camera.position.y = 1.6;
+        }
+        
+        // ============================================
+        // LIVESTREAM CHAT SYSTEM
+        // ============================================
+        
+        function addChatMessage(username, message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            messageDiv.innerHTML = `<span class="username">${username}:</span>${message}`;
+            chatContainer.appendChild(messageDiv);
+            
+            // Keep only last 5 messages
+            while (chatContainer.children.length > 5) {
+                chatContainer.removeChild(chatContainer.firstChild);
+            }
+            
+            // Fade out after 8 seconds
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.style.transition = 'opacity 1s';
+                    messageDiv.style.opacity = '0';
+                    setTimeout(() => messageDiv.remove(), 1000);
+                }
+            }, 8000);
+        }
+        
+        function updateViewerCount() {
+            // Viewer count slowly increases
+            if (Math.random() > 0.7) {
+                viewerCount += Math.random() > 0.5 ? 1 : -1;
+                viewerCount = Math.max(5, Math.min(viewerCount, 24));
+                document.getElementById('viewCount').textContent = `LIVE • ${viewerCount} viewers`;
+            }
+        }
+        
+        function sendRandomChat() {
+            const username = usernames[Math.floor(Math.random() * usernames.length)];
+            const message = chatMessages[Math.floor(Math.random() * chatMessages.length)];
+            addChatMessage(username, message);
+        }
+        
+        // ============================================
+        // PUZZLE LOGIC (Phase 1 style + disorientation)
+        // ============================================
+        
+        function updatePuzzles(deltaTime) {
+            puzzleObjects.forEach(obj => {
+                if (obj.userData.solved) return;
+                
+                const isLooking = isPlayerLookingAt(obj);
+                
+                switch (obj.userData.type) {
+                    case 'wakeup':
+                        updateWakeUpPuzzle(obj, isLooking, deltaTime);
+                        break;
+                    case 'rearrange':
+                        updateRearrangePuzzle(obj, isLooking, deltaTime);
+                        break;
+                    case 'contradiction':
+                        updateContradictionPuzzle(obj, isLooking, deltaTime);
+                        break;
+                    case 'selfresolve':
+                        updateSelfResolvePuzzle(obj, deltaTime);
+                        break;
+                    case 'numbers':
+                        updateNumbersPuzzle(obj, deltaTime);
+                        break;
+                }
+            });
+            
+            // Floor tilts randomly
+            updateFloorTilt(deltaTime);
+        }
+        
+        function updateWakeUpPuzzle(obj, isLooking, deltaTime) {
+            if (isLooking) {
+                obj.userData.watchTime += deltaTime;
+                const intensity = Math.min(obj.userData.watchTime / 4, 1);
+                obj.material.emissiveIntensity = 0.2 + intensity * 0.8;
+                obj.scale.setScalar(1 + Math.sin(Date.now() * 0.01) * 0.1 * intensity);
+                obj.rotation.y += deltaTime * intensity;
+                
+                if (obj.userData.watchTime >= 4) {
+                    solvePuzzle(obj, "it woke up");
+                }
+            } else {
+                obj.userData.watchTime = Math.max(0, obj.userData.watchTime - deltaTime * 0.5);
+                obj.material.emissiveIntensity = 0.2;
+                obj.scale.setScalar(1);
+            }
+        }
+        
+        function updateRearrangePuzzle(obj, isLooking, deltaTime) {
+            if (!isLooking) {
+                obj.userData.unwatchTime += deltaTime;
+                obj.rotation.x += deltaTime * 3;
+                obj.rotation.y += deltaTime * 2;
+                obj.rotation.z += deltaTime * 1.5;
+                
+                if (obj.userData.unwatchTime >= 3) {
+                    solvePuzzle(obj, "it rearranged itself");
+                }
+            } else {
+                obj.userData.unwatchTime = Math.max(0, obj.userData.unwatchTime - deltaTime * 0.3);
+                obj.rotation.x += deltaTime * 0.1;
+                obj.rotation.y += deltaTime * 0.1;
+            }
+        }
+        
+        function updateContradictionPuzzle(obj, isLooking, deltaTime) {
+            obj.rotation.x += deltaTime * 0.5;
+            obj.rotation.y += deltaTime * 0.3;
+            
+            if (isLooking) {
+                obj.userData.watchTime += deltaTime;
+                const glitchText = Math.random() > 0.5 ? "DON'T LOOK AT THIS" : "LOOK AT THIS";
+                showInstruction(glitchText, 100);
+                
+                if (obj.userData.watchTime >= 5) {
+                    solvePuzzle(obj, "contradiction collapsed");
+                }
+            }
+        }
+        
+        function updateSelfResolvePuzzle(obj, deltaTime) {
+            obj.userData.activatedTime += deltaTime;
+            obj.rotation.y += deltaTime * 0.5;
+            
+            if (obj.userData.activatedTime >= 8) {
+                solvePuzzle(obj, "it solved itself before you could");
+                obj.scale.multiplyScalar(0.95);
+            }
+        }
+        
+        function updateNumbersPuzzle(obj, deltaTime) {
+            obj.rotation.x += deltaTime * 0.3;
+            obj.rotation.y += deltaTime * 0.4;
+            
+            const now = Date.now();
+            if (now - obj.userData.lastNumberChange > 1500) {
+                obj.userData.numberCycle++;
+                obj.userData.lastNumberChange = now;
+                
+                const numbers = ['7', '77', '777', '7777', '77777'];
+                const currentNum = numbers[obj.userData.numberCycle % numbers.length];
+                showInstruction(currentNum, 1400);
+                
+                if (obj.userData.numberCycle >= 8) {
+                    solvePuzzle(obj, "the numbers stopped");
+                }
+            }
+        }
+        
+        let floorTiltTime = 0;
+        let currentTiltDirection = new THREE.Vector3();
+        let tiltChangeCooldown = 0;
+        
+        function updateFloorTilt(deltaTime) {
+            floorTiltTime += deltaTime;
+            
+            const floor = scene.children.find(obj => obj.userData.type === 'floor');
+            if (!floor) return;
+            
+            // Change tilt direction randomly every 3-6 seconds
+            tiltChangeCooldown -= deltaTime;
+            if (tiltChangeCooldown <= 0) {
+                currentTiltDirection.set(
+                    (Math.random() - 0.5) * 0.15,
+                    0,
+                    (Math.random() - 0.5) * 0.15
+                );
+                tiltChangeCooldown = 3 + Math.random() * 3;
+            }
+            
+            // Apply tilt
+            floor.rotation.z = Math.sin(floorTiltTime * 0.5) * currentTiltDirection.x;
+            floor.rotation.x = -Math.PI / 2 + Math.sin(floorTiltTime * 0.4) * currentTiltDirection.z;
+        }
+        
+        function isPlayerLookingAt(object) {
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            
+            const toObject = new THREE.Vector3();
+            toObject.subVectors(object.position, camera.position).normalize();
+            
+            const dot = direction.dot(toObject);
+            return dot > 0.97;
+        }
+        
+        function solvePuzzle(obj, message) {
+            if (obj.userData.solved) return;
+            
+            obj.userData.solved = true;
+            gameState.puzzlesSolved++;
+            
+            showInstruction(message, 2000);
+            addChatMessage(usernames[Math.floor(Math.random() * usernames.length)], "wait they solved one");
+            
+            // Fade out object
+            const fadeInterval = setInterval(() => {
+                obj.material.opacity -= 0.05;
+                obj.material.transparent = true;
+                obj.scale.multiplyScalar(0.95);
+                
+                if (obj.material.opacity <= 0) {
+                    clearInterval(fadeInterval);
+                    scene.remove(obj);
+                }
+            }, 50);
+            
+            // Check if all solved
+            if (gameState.puzzlesSolved >= gameState.totalPuzzles) {
+                setTimeout(() => {
+                    showInstruction("they watched you solve everything", 3000);
+                    addChatMessage('xX_sc3ne_xX', "this is getting weird");
+                    setTimeout(() => {
+                        showInstruction("[ phase 3 not yet implemented ]", 0);
+                    }, 3000);
+                }, 2000);
+            }
+        }
+        
+        // ============================================
+        // UI
+        // ============================================
+        
+        let currentInstruction = null;
+        
+        function showInstruction(html, duration = 0) {
+            if (currentInstruction) {
+                currentInstruction.remove();
+            }
+            
+            const instruction = document.createElement('div');
+            instruction.className = 'instruction-text';
+            instruction.innerHTML = html;
+            document.getElementById('ui-layer').appendChild(instruction);
+            currentInstruction = instruction;
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    if (currentInstruction === instruction) {
+                        instruction.style.transition = 'opacity 0.5s';
+                        instruction.style.opacity = '0';
+                        setTimeout(() => instruction.remove(), 500);
+                        currentInstruction = null;
+                    }
+                }, duration);
+            }
+        }
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        let lastChatTime = Date.now();
+        let lastViewerUpdate = Date.now();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = clock.getDelta();
+            const now = Date.now();
+            
+            updatePlayer(deltaTime);
+            updatePuzzles(deltaTime);
+            
+            // Random chat messages (every 3-7 seconds)
+            if (now - lastChatTime > 3000 + Math.random() * 4000) {
+                sendRandomChat();
+                lastChatTime = now;
+            }
+            
+            // Update viewer count periodically
+            if (now - lastViewerUpdate > 2000) {
+                updateViewerCount();
+                lastViewerUpdate = now;
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // ============================================
+        // INIT
+        // ============================================
+        
+        window.addEventListener('load', () => {
+            // Fade in from black
+            document.body.style.opacity = '0';
+            document.body.style.transition = 'opacity 1s';
+            
+            initThreeJS();
+            animate();
+            
+            setTimeout(() => {
+                document.body.style.opacity = '1';
+            }, 100);
+        });
+    </script>
+</body>
+</html>
