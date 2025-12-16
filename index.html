@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>still together - phase 4</title>
+    <title>still together</title>
     <style>
         * {
             margin: 0;
@@ -150,11 +150,6 @@
         // Slider
         let isDragging = false;
         let sliderProgress = 0;
-        
-        // Glitch effect
-        let isGrayscale = false;
-        let glitchTimer = 0;
-        let glitchInterval = 3 + Math.random() * 4; // Random interval 3-7 seconds
         
         // ============================================
         // INIT THREE.JS
@@ -483,37 +478,6 @@
             
             // Slow camera rotation
             camera.rotation.z = Math.sin(Date.now() * 0.0001) * 0.02;
-            
-            // Grayscale glitch effect
-            glitchTimer += deltaTime;
-            if (glitchTimer >= glitchInterval) {
-                isGrayscale = !isGrayscale;
-                glitchTimer = 0;
-                
-                if (isGrayscale) {
-                    // Switch to grayscale
-                    scene.background.setHex(0xcccccc);
-                    glitchShapes.forEach(shape => {
-                        if (shape.material) {
-                            if (!shape.userData.originalColor) {
-                                shape.userData.originalColor = shape.material.color.getHex();
-                            }
-                            const gray = Math.random() * 0.5 + 0.2;
-                            shape.material.color.setRGB(gray, gray, gray);
-                        }
-                    });
-                    glitchInterval = 0.3 + Math.random() * 0.5; // Stay grayscale 0.3-0.8 seconds
-                } else {
-                    // Switch back to color
-                    scene.background.setHex(0xf5f5f5);
-                    glitchShapes.forEach(shape => {
-                        if (shape.material && shape.userData.originalColor !== undefined) {
-                            shape.material.color.setHex(shape.userData.originalColor);
-                        }
-                    });
-                    glitchInterval = 3 + Math.random() * 4; // Wait 3-7 seconds before next glitch
-                }
-            }
         }
         
         // ============================================
