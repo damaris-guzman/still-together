@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clock Gears</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #1a1215;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        let scene, camera, renderer;
+        let clock = new THREE.Clock();
+        let gears = [];
+        let filmStrips = [];
+        let splatters = [];
+        let entities = [];
+        let connections = [];
+        
+        function createGearGeometry(radius, teeth, toothHeight, innerRadius, style) {
+            const shape = new THREE.Shape();
+            
+            if (style === 'skeleton') {
+                // Outline only - just the teeth ring
+                for (let i = 0; i <= teeth * 2; i++) {
+                    const angle = (Math.PI * 2 / (teeth * 2)) * i;
+                    const r = (i % 2 === 0) ? radius : radius + toothHeight;
+                    const x = Math.cos(angle) * r;
+                    const y = Math.sin(angle) * r;
+                    if (i === 0) shape.moveTo(x, y);
+                    else shape.lineTo(x, y);
+                }
+                shape.lineTo(Math.cos(0) * radius, Math.sin(0) * radius);
+                
+                // Add inner circle as hole
+                const hole = new THREE.Path();
+                hole.absarc(0, 0, innerRadius, 0, Math.PI * 2, true);
+                shape.holes.push(hole);
+                
+            } else {
+                // Solid gear with teeth
+                for (let i = 0; i <= teeth * 2; i++) {
+                    const angle = (Math.PI * 2 / (teeth * 2)) * i;
+                    const r = (i % 2 === 0) ? radius : radius + toothHeight;
+                    const x = Math.cos(angle) * r;
+                    const y = Math.sin(angle) * r;
+                    if (i === 0) shape.moveTo(x, y);
+                    else shape.lineTo(x, y);
+                }
+                shape.lineTo(Math.cos(0) * radius, Math.sin(0) * radius);
+                
+                // Inner circle hole
+                const hole = new THREE.Path();
+                hole.absarc(0, 0, innerRadius * 0.3, 0, Math.PI * 2, true);
+                shape.holes.push(hole);
+                
+                // Spoke holes
+                if (style === 'spokes') {
+                    for (let i = 0; i < 6; i++) {
+                        const angle = (Math.PI * 2 / 6) * i;
+                        const holeX = Math.cos(angle) * innerRadius * 0.7;
+                        const holeY = Math.sin(angle) * innerRadius * 0.7;
+                        const spokeHole = new THREE.Path();
+                        spokeHole.absarc(holeX, holeY, innerRadius * 0.15, 0, Math.PI * 2, true);
+                        shape.holes.push(spokeHole);
+                    }
+                }
+            }
+            
+            const extrudeSettings = {
+                depth: style === 'skeleton' ? 0.08 : 0.25,
+                bevelEnabled: true,
+                bevelThickness: 0.03,
+                bevelSize: 0.03,
+                bevelSegments: 2
+            };
+            
+            return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        }
+        
+        function createGear(x, y, z, radius, teeth, speed, colorHex, style) {
+            const toothHeight = radius * 0.2;
+            const innerRadius = radius * 0.6;
+            
+            const geometry = createGearGeometry(radius, teeth, toothHeight, innerRadius, style);
+            const material = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                metalness: 0.8,
+                roughness: 0.4,
+                flatShading: style === 'skeleton'
+            });
+            
+            const gear = new THREE.Mesh(geometry, material);
+            gear.position.set(x, y, z);
+            gear.rotation.x = Math.random() * 0.2 - 0.1;
+            gear.rotation.y = Math.random() * 0.2 - 0.1;
+            
+            gear.userData.speed = speed;
+            gear.userData.style = style;
+            
+            scene.add(gear);
+            gears.push(gear);
+            
+            return gear;
+        }
+        
+        function createFilmStrip(x, y, z, width, height, angle) {
+            const group = new THREE.Group();
+            
+            // Film frame
+            const frameGeo = new THREE.PlaneGeometry(width, height);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0xf0e6dc,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.7
+            });
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+            group.add(frame);
+            
+            // Sprocket holes
+            const holeGeo = new THREE.CircleGeometry(0.05, 8);
+            const holeMat = new THREE.MeshBasicMaterial({
+                color: 0x000000,
+                side: THREE.DoubleSide
+            });
+            
+            const holes = 5;
+            for (let i = 0; i < holes; i++) {
+                const holeX = -width/2 + (width / (holes - 1)) * i;
+                
+                const topHole = new THREE.Mesh(holeGeo, holeMat);
+                topHole.position.set(holeX, height/2 + 0.08, 0.01);
+                group.add(topHole);
+                
+                const bottomHole = new THREE.Mesh(holeGeo, holeMat);
+                bottomHole.position.set(holeX, -height/2 - 0.08, 0.01);
+                group.add(bottomHole);
+            }
+            
+            group.position.set(x, y, z);
+            group.rotation.z = angle;
+            group.userData.rotSpeed = (Math.random() - 0.5) * 0.003;
+            
+            scene.add(group);
+            filmStrips.push(group);
+            
+            return group;
+        }
+        
+        function createSplatter(x, y, z, size, color) {
+            const geo = new THREE.CircleGeometry(size, 12);
+            const mat = new THREE.MeshBasicMaterial({
+                color: color,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.4
+            });
+            const splatter = new THREE.Mesh(geo, mat);
+            splatter.position.set(x, y, z);
+            
+            scene.add(splatter);
+            splatters.push(splatter);
+            
+            return splatter;
+        }
+        
+        function createTextSprite(text, size, color) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 256;
+            
+            context.fillStyle = color;
+            context.font = `bold ${size}px Arial`;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                opacity: 0.3
+            });
+            
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(4, 2, 1);
+            
+            return sprite;
+        }
+        
+        function createEntity(x, y, z, variation) {
+            const group = new THREE.Group();
+            
+            // Body with layers
+            const layers = [
+                { size: 0.5, color: 0xb71c1c },
+                { size: 0.43, color: 0xff5722 },
+                { size: 0.36, color: 0xff8a65 },
+                { size: 0.29, color: 0xffb74d }
+            ];
+            
+            layers.forEach(layer => {
+                const geometry = new THREE.SphereGeometry(layer.size, 24, 24);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: layer.color,
+                    roughness: 0.5
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                group.add(mesh);
+            });
+            
+            // Arms
+            const armCount = variation === 'tentacles' ? 6 : 5;
+            const arms = [];
+            for (let i = 0; i < armCount; i++) {
+                const angle = (i / armCount) * Math.PI * 2;
+                const armGroup = new THREE.Group();
+                
+                if (variation === 'tentacles') {
+                    // Long wavy arms
+                    for (let j = 0; j < 5; j++) {
+                        const size = 0.2 - j * 0.03;
+                        const dist = 0.3 + j * 0.2;
+                        const geo = new THREE.SphereGeometry(size, 12, 12);
+                        geo.scale(1.5, 0.6, 1);
+                        const mat = new THREE.MeshStandardMaterial({ 
+                            color: 0xd32f2f,
+                            roughness: 0.5
+                        });
+                        const seg = new THREE.Mesh(geo, mat);
+                        seg.position.x = Math.cos(angle) * dist;
+                        seg.position.y = Math.sin(angle) * dist;
+                        seg.rotation.z = angle;
+                        armGroup.add(seg);
+                    }
+                } else {
+                    // Regular arms
+                    for (let j = 0; j < 3; j++) {
+                        const size = 0.25 - j * 0.06;
+                        const dist = 0.35 + j * 0.25;
+                        const geo = new THREE.SphereGeometry(size, 12, 12);
+                        geo.scale(1.3, 0.7, 1);
+                        const mat = new THREE.MeshStandardMaterial({ 
+                            color: 0xd32f2f,
+                            roughness: 0.5
+                        });
+                        const seg = new THREE.Mesh(geo, mat);
+                        seg.position.x = Math.cos(angle) * dist;
+                        seg.position.y = Math.sin(angle) * dist;
+                        seg.rotation.z = angle;
+                        armGroup.add(seg);
+                    }
+                }
+                
+                arms.push(armGroup);
+                group.add(armGroup);
+            }
+            
+            // Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.1, 16, 16);
+            const eyeMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.15, 0.1, 0.45);
+            group.add(leftEye);
+            
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(0.15, 0.1, 0.45);
+            group.add(rightEye);
+            
+            // Smile
+            const smileCurve = new THREE.EllipseCurve(
+                0, 0,
+                0.2, 0.15,
+                Math.PI * 0.2, Math.PI * 0.8,
+                false,
+                0
+            );
+            const smilePoints = smileCurve.getPoints(20);
+            const smileGeometry = new THREE.BufferGeometry().setFromPoints(smilePoints);
+            const smileMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+            const smile = new THREE.Line(smileGeometry, smileMaterial);
+            smile.position.set(0, -0.1, 0.45);
+            smile.rotation.x = Math.PI;
+            group.add(smile);
+            
+            group.position.set(x, y, z);
+            group.userData.arms = arms;
+            group.userData.variation = variation;
+            group.userData.bobSpeed = Math.random() * 0.5 + 0.5;
+            group.userData.bobOffset = Math.random() * Math.PI * 2;
+            
+            scene.add(group);
+            entities.push(group);
+            
+            return group;
+        }
+        
+        function createClipboard(x, y, z) {
+            const group = new THREE.Group();
+            
+            // Clipboard backing
+            const boardGeo = new THREE.BoxGeometry(0.4, 0.6, 0.05);
+            const boardMat = new THREE.MeshStandardMaterial({ color: 0x8b6f3a });
+            const board = new THREE.Mesh(boardGeo, boardMat);
+            group.add(board);
+            
+            // Paper
+            const paperGeo = new THREE.PlaneGeometry(0.35, 0.5);
+            const paperMat = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff,
+                side: THREE.DoubleSide
+            });
+            const paper = new THREE.Mesh(paperGeo, paperMat);
+            paper.position.z = 0.03;
+            group.add(paper);
+            
+            // Lines on paper
+            for (let i = 0; i < 6; i++) {
+                const lineGeo = new THREE.PlaneGeometry(0.3, 0.02);
+                const lineMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                const line = new THREE.Mesh(lineGeo, lineMat);
+                line.position.set(0, 0.15 - i * 0.06, 0.04);
+                group.add(line);
+            }
+            
+            // Clip at top
+            const clipGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15);
+            const clipMat = new THREE.MeshStandardMaterial({ 
+                color: 0x444444,
+                metalness: 0.8
+            });
+            const clip = new THREE.Mesh(clipGeo, clipMat);
+            clip.rotation.z = Math.PI / 2;
+            clip.position.set(0, 0.32, 0.03);
+            group.add(clip);
+            
+            group.position.set(x, y, z);
+            group.rotation.x = 0.2;
+            group.rotation.y = -0.3;
+            
+            scene.add(group);
+            
+            return group;
+        }
+        
+        function createGearConnection(gear1, gear2) {
+            const points = [];
+            points.push(new THREE.Vector3(gear1.position.x, gear1.position.y, gear1.position.z));
+            points.push(new THREE.Vector3(gear2.position.x, gear2.position.y, gear2.position.z));
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0x555555,
+                linewidth: 2,
+                transparent: true,
+                opacity: 0.4
+            });
+            const line = new THREE.Line(geometry, material);
+            
+            scene.add(line);
+            connections.push({ line, gear1, gear2 });
+            
+            return line;
+        }
+        
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1215);
+            scene.fog = new THREE.Fog(0x1a1215, 15, 40);
+            
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 25);
+            
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('gameCanvas'),
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x4a3030, 0.6);
+            scene.add(ambientLight);
+            
+            const pointLight1 = new THREE.PointLight(0xff6b3d, 1.2, 60);
+            pointLight1.position.set(12, 8, 15);
+            scene.add(pointLight1);
+            
+            const pointLight2 = new THREE.PointLight(0xffd700, 0.9, 60);
+            pointLight2.position.set(-12, -8, 18);
+            scene.add(pointLight2);
+            
+            const pointLight3 = new THREE.PointLight(0xff4500, 0.7, 50);
+            pointLight3.position.set(0, 12, 10);
+            scene.add(pointLight3);
+            
+            createAllElements();
+            
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+        
+        function createAllElements() {
+            const styles = ['solid', 'spokes', 'skeleton', 'spokes'];
+            const colors = [
+                0xb8945a, // brass
+                0xe0e0e0, // silver
+                0x8b6f3a, // bronze
+                0xd4a574, // copper
+                0x7a5c3e, // rusty
+                0xc9a959  // gold
+            ];
+            
+            // Create connected gear clusters
+            const clusters = [
+                { x: -8, y: 6, count: 5 },
+                { x: 8, y: 6, count: 5 },
+                { x: -8, y: -6, count: 5 },
+                { x: 8, y: -6, count: 5 },
+                { x: 0, y: 0, count: 8 }
+            ];
+            
+            clusters.forEach(cluster => {
+                const clusterGears = [];
+                for (let i = 0; i < cluster.count; i++) {
+                    const angle = (i / cluster.count) * Math.PI * 2;
+                    const dist = 1.5 + Math.random() * 2;
+                    const x = cluster.x + Math.cos(angle) * dist;
+                    const y = cluster.y + Math.sin(angle) * dist;
+                    const z = Math.random() * 3 - 1.5;
+                    
+                    const radius = 0.5 + Math.random() * 1.5;
+                    const teeth = Math.floor(8 + Math.random() * 16);
+                    const speed = (Math.random() - 0.5) * 0.012;
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    const style = styles[Math.floor(Math.random() * styles.length)];
+                    
+                    const gear = createGear(x, y, z, radius, teeth, speed, color, style);
+                    clusterGears.push(gear);
+                }
+                
+                // Connect gears within cluster
+                for (let i = 0; i < clusterGears.length; i++) {
+                    if (i < clusterGears.length - 1) {
+                        createGearConnection(clusterGears[i], clusterGears[i + 1]);
+                    }
+                    if (i === clusterGears.length - 1) {
+                        createGearConnection(clusterGears[i], clusterGears[0]);
+                    }
+                }
+            });
+            
+            // Create entities interacting with gears
+            const variations = ['classic', 'tentacles', 'classic', 'tentacles', 'classic'];
+            
+            // Entities pushing gears
+            createEntity(-10, 8, 2, variations[0]);
+            createEntity(10, 8, 2, variations[1]);
+            createEntity(-10, -8, 2, variations[2]);
+            createEntity(10, -8, 2, variations[3]);
+            
+            // Entities with clipboards observing
+            const observerPos = [
+                { x: -6, y: 0, z: 5 },
+                { x: 6, y: 0, z: 5 },
+                { x: 0, y: 10, z: 3 }
+            ];
+            
+            observerPos.forEach(pos => {
+                const entity = createEntity(pos.x, pos.y, pos.z, 'classic');
+                const clipboard = createClipboard(pos.x + 0.8, pos.y - 0.5, pos.z + 0.3);
+                entity.userData.clipboard = clipboard;
+            });
+            
+            // Create film strips
+            for (let i = 0; i < 25; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 18;
+                const x = Math.cos(angle) * dist;
+                const y = Math.sin(angle) * dist;
+                const z = Math.random() * 8 - 4;
+                
+                const width = 0.4 + Math.random() * 0.8;
+                const height = 0.2 + Math.random() * 0.4;
+                const rotation = Math.random() * Math.PI * 2;
+                
+                createFilmStrip(x, y, z, width, height, rotation);
+            }
+            
+            // Create paint splatters
+            const splatterColors = [0xff6432, 0xff9650, 0x64b4ff, 0xffc864, 0xff4500];
+            for (let i = 0; i < 40; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 20;
+                const x = Math.cos(angle) * dist;
+                const y = Math.sin(angle) * dist;
+                const z = Math.random() * 6 - 3;
+                
+                const size = 0.1 + Math.random() * 0.4;
+                const color = splatterColors[Math.floor(Math.random() * splatterColors.length)];
+                
+                createSplatter(x, y, z, size, color);
+            }
+            
+            // Create "TIME" text sprites
+            for (let i = 0; i < 5; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 15;
+                const x = Math.cos(angle) * dist;
+                const y = Math.sin(angle) * dist;
+                const z = Math.random() * 5 - 2.5;
+                
+                const textSprite = createTextSprite('TIME', 120, '#000000');
+                textSprite.position.set(x, y, z);
+                textSprite.userData.baseZ = z;
+                scene.add(textSprite);
+            }
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = clock.getElapsedTime();
+            
+            // Rotate all gears
+            gears.forEach(gear => {
+                gear.rotation.z += gear.userData.speed;
+            });
+            
+            // Rotate film strips
+            filmStrips.forEach(strip => {
+                strip.rotation.z += strip.userData.rotSpeed;
+            });
+            
+            // Animate entities
+            entities.forEach((entity, i) => {
+                // Bob up and down
+                const bobAmount = Math.sin(time * entity.userData.bobSpeed + entity.userData.bobOffset) * 0.3;
+                entity.position.y += bobAmount * 0.01;
+                
+                // Wave arms
+                entity.userData.arms.forEach((arm, armIndex) => {
+                    const armAngle = (armIndex / entity.userData.arms.length) * Math.PI * 2;
+                    const wave = Math.sin(time * 2 + armIndex) * 0.2;
+                    arm.rotation.z = armAngle + wave;
+                });
+                
+                // If entity has clipboard, make it look at clipboard
+                if (entity.userData.clipboard) {
+                    entity.lookAt(entity.userData.clipboard.position);
+                    entity.rotation.z = 0;
+                }
+            });
+            
+            // Update connection lines
+            connections.forEach(conn => {
+                const points = [];
+                points.push(new THREE.Vector3(conn.gear1.position.x, conn.gear1.position.y, conn.gear1.position.z));
+                points.push(new THREE.Vector3(conn.gear2.position.x, conn.gear2.position.y, conn.gear2.position.z));
+                conn.line.geometry.setFromPoints(points);
+            });
+            
+            // Gentle camera movement
+            camera.position.x = Math.sin(time * 0.08) * 3;
+            camera.position.y = Math.cos(time * 0.12) * 2;
+            camera.lookAt(0, 0, 0);
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
