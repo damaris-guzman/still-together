@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>still together - phase 5: operation</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            font-family: 'VT323', 'Courier New', monospace;
+            background: #000;
+            cursor: crosshair;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            image-rendering: pixelated;
+            filter: contrast(1.1) brightness(0.95);
+        }
+        
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 150px rgba(0, 0, 0, 0.7);
+        }
+        
+        .crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+        }
+        
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.7);
+        }
+        
+        .crosshair::before {
+            left: 50%;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            transform: translateX(-50%);
+        }
+        
+        .crosshair::after {
+            top: 50%;
+            left: 0;
+            height: 2px;
+            width: 100%;
+            transform: translateY(-50%);
+        }
+        
+        .stream-ui {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 0, 0, 0.4);
+            padding: 8px 12px;
+            font-size: 18px;
+            color: #ff3333;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px rgba(255, 0, 0, 0.7);
+        }
+        
+        .recording-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #ff0000;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .wire-status {
+            position: fixed;
+            top: 60px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            padding: 8px 12px;
+            font-size: 16px;
+            color: #00ffff;
+            letter-spacing: 1px;
+        }
+        
+        .mistake-counter {
+            position: fixed;
+            top: 105px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            padding: 8px 12px;
+            font-size: 16px;
+            color: #ff6666;
+            letter-spacing: 1px;
+        }
+        
+        .chat-container {
+            position: fixed;
+            bottom: 80px;
+            left: 20px;
+            width: 380px;
+            max-height: 400px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .chat-message {
+            background: rgba(0, 0, 0, 0.75);
+            border-left: 2px solid rgba(255, 0, 255, 0.5);
+            padding: 6px 10px;
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.8);
+            letter-spacing: 0.5px;
+            animation: slideIn 0.3s ease-out;
+            word-wrap: break-word;
+        }
+        
+        .chat-message .username {
+            color: #ff00ff;
+            margin-right: 6px;
+            text-shadow: 0 0 5px rgba(255, 0, 255, 0.5);
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .instruction-text {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 20px;
+            text-align: center;
+            max-width: 800px;
+            line-height: 1.4;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="ui-layer">
+        <div class="vignette"></div>
+        <div class="crosshair"></div>
+        
+        <div class="stream-ui">
+            <span class="recording-dot"></span>
+            <span id="viewCount">LIVE • 94 viewers</span>
+        </div>
+        
+        <div class="wire-status" id="wireStatus">
+            CONNECTED: <span id="connectionCount">0 / 10</span>
+        </div>
+        
+        <div class="mistake-counter" id="mistakeCounter">
+            MISTAKES: <span id="mistakeCount">0</span>
+        </div>
+        
+        <div class="chat-container" id="chatContainer"></div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // PHASE 5 - OPERATION STYLE WIRE PANEL
+        // ============================================
+        
+        let scene, camera, renderer;
+        let clock = new THREE.Clock();
+        let raycaster = new THREE.Raycaster();
+        raycaster.params.Mesh = raycaster.params.Mesh || {};
+        raycaster.params.Mesh.threshold = 0.5; // Much easier to target objects
+        let mouse = new THREE.Vector2();
+        
+        let viewerCount = 94;
+        let mistakes = 0;
+        let connections = 0;
+        let totalConnections = 10;
+        
+        let panel = null;
+        let ports = [];
+        let wires = [];
+        let metalEdges = [];
+        let grabbedWire = null;
+        let hoveredObject = null;
+        
+        let lightningTimer = 5;
+        let lastLightningTime = 0;
+        
+        let mouseX = 0, mouseY = 0;
+        let isPointerLocked = false;
+        let cameraShakeAmount = 0;
+        
+        let hallucinations = [];
+        let hallucinationIntensity = 0; // Increases with mistakes
+        let environmentalShapes = []; // Shapes spawned on mistakes
+        let shapesGlitching = false; // Activated when 3 wires remain
+        
+        const PORT_CONFIGS = [
+            // Top row of breakers
+            { symbol: '1', color: 0xff6600, pos: [-4, 2.2, 0] },
+            { symbol: '2', color: 0xff6600, pos: [-2.8, 2.2, 0] },
+            { symbol: '3', color: 0xff6600, pos: [-1.6, 2.2, 0] },
+            { symbol: '4', color: 0xff6600, pos: [-0.4, 2.2, 0] },
+            // Middle row
+            { symbol: '5', color: 0xff6600, pos: [0.8, 2.2, 0] },
+            { symbol: '6', color: 0x0099ff, pos: [2, 2.2, 0] },
+            { symbol: '7', color: 0x0099ff, pos: [3.2, 2.2, 0] },
+            // Bottom row bus bars
+            { symbol: 'N', color: 0x0099ff, pos: [-3, -1.8, 0] },
+            { symbol: 'G', color: 0x00ff44, pos: [-0.5, -1.8, 0] },
+            { symbol: 'L', color: 0xff0000, pos: [2, -1.8, 0] }
+        ];
+        
+        const usernames = [
+            'xX_sc3ne_xX', 'luv2c0nc3al', '2bh', 'dinonugget', '2getreal',
+            'marshasnotepad', 'w4tch1ng_u', 'gl1tch3d_0ut', 'n0_3sc4p3',
+            'f4ll1ng_th4ough', 'st1ll_h3r3', 'wh3r3_r_u', 'l0st_1n_1t',
+            'c4nt_l00k_4w4y', 'pr0c3ss1ng', 't00_r34l', 'un5ett1ed',
+            'n3ur4l_m3sh', 'c0nn3ct3d', 'br0k3n_l1nk', 'sy5t3m_f41l',
+            'st34dy_h4nd', 'w1r3_fr34k', 'p4n3l_w4tch3r'
+        ];
+        
+        const chatPhases = {
+            start: [
+                "here we go",
+                "can they do it",
+                "this looks hard 😬",
+                "steady hand needed",
+                "operation vibes",
+                "don't mess up"
+            ],
+            mistake: [
+                "OUCH 💀",
+                "they touched it",
+                "buzzer moment",
+                "that's a mistake",
+                "careful 😳",
+                "viewer count going up lol",
+                "everyone saw that",
+                "shaking 😬",
+                "this is painful to watch",
+                "they're nervous"
+            ],
+            success: [
+                "nice connection ✓",
+                "that's one",
+                "got it",
+                "clean",
+                "ok ok 👁️",
+                "making progress",
+                "steady",
+                "they're doing it"
+            ],
+            pressure: [
+                "don't look at the viewer count",
+                "everyone's watching",
+                "hands shaking?",
+                "the pressure 😰",
+                "this is intense",
+                "can they handle it",
+                "so many people watching",
+                "anxiety speedrun"
+            ],
+            final: [
+                "last one",
+                "almost there",
+                "don't mess up now 😬",
+                "final wire",
+                "this is it",
+                "everyone hold your breath"
+            ]
+        };
+        
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050505);
+            scene.fog = new THREE.Fog(0x050505, 10, 25);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 0, 6); // CAMERA IS FIXED - NO MOVEMENT, further back for easier interaction
+            
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('gameCanvas'),
+                antialias: false
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            
+            // Lighting for panel (bright like workshop/utility room)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const spotLight = new THREE.SpotLight(0xffffff, 1.2);
+            spotLight.position.set(0, 0, 2);
+            spotLight.target.position.set(0, 0, -3);
+            scene.add(spotLight);
+            scene.add(spotLight.target);
+            
+            const fillLight = new THREE.PointLight(0xffffee, 0.4, 10);
+            fillLight.position.set(-3, 2, -1);
+            scene.add(fillLight);
+            
+            const fillLight2 = new THREE.PointLight(0xffffee, 0.4, 10);
+            fillLight2.position.set(3, 2, -1);
+            scene.add(fillLight2);
+            
+            createSkybox();
+            createPanel();
+            createWires();
+            createInitialHallucinations();
+            setupControls();
+            
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('mousemove', onMouseMove);
+        }
+        
+        // ============================================
+        // SKYBOX & ENVIRONMENT
+        // ============================================
+        
+        function createSkybox() {
+            // Create inverted sphere for panoramic environment
+            const skyGeo = new THREE.SphereGeometry(50, 32, 32);
+            const textureLoader = new THREE.TextureLoader();
+            
+            // Placeholder gradient texture (replace with panorama.jpg)
+            const canvas = document.createElement('canvas');
+            canvas.width = 2048;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 1024);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(0.5, '#16213e');
+            gradient.addColorStop(1, '#0f0f1e');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 2048, 1024);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            
+            const skyMat = new THREE.MeshBasicMaterial({
+                map: texture,
+                side: THREE.BackSide,
+                fog: false
+            });
+            
+            const skyMesh = new THREE.Mesh(skyGeo, skyMat);
+            scene.add(skyMesh);
+        }
+        
+        // ============================================
+        // PANEL CREATION
+        // ============================================
+        
+        function createPanel() {
+            const panelGroup = new THREE.Group();
+            
+            // Main panel backing (white/beige like real breaker boxes)
+            const panelGeo = new THREE.BoxGeometry(10, 7, 0.4);
+            const panelMat = new THREE.MeshStandardMaterial({
+                color: 0xf5f5dc, // Beige/cream color
+                metalness: 0.2,
+                roughness: 0.8
+            });
+            const panelMesh = new THREE.Mesh(panelGeo, panelMat);
+            panelMesh.position.z = -3;
+            panelGroup.add(panelMesh);
+            
+            // Frame edges (gray metal)
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x8899aa,
+                metalness: 0.6,
+                roughness: 0.5
+            });
+            
+            // Top frame
+            const topFrame = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.4, 0.5), frameMat);
+            topFrame.position.set(0, 3.7, -2.85);
+            panelGroup.add(topFrame);
+            
+            // Bottom frame
+            const bottomFrame = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.4, 0.5), frameMat);
+            bottomFrame.position.set(0, -3.7, -2.85);
+            panelGroup.add(bottomFrame);
+            
+            // Left frame
+            const leftFrame = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7.8, 0.5), frameMat);
+            leftFrame.position.set(-5.25, 0, -2.85);
+            panelGroup.add(leftFrame);
+            
+            // Right frame
+            const rightFrame = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7.8, 0.5), frameMat);
+            rightFrame.position.set(5.25, 0, -2.85);
+            panelGroup.add(rightFrame);
+            
+            // Add DIN rail (horizontal metal strip)
+            const railMat = new THREE.MeshStandardMaterial({
+                color: 0xcccccc,
+                metalness: 0.8,
+                roughness: 0.3
+            });
+            const rail1 = new THREE.Mesh(new THREE.BoxGeometry(8, 0.15, 0.15), railMat);
+            rail1.position.set(0, 2.5, -2.7);
+            panelGroup.add(rail1);
+            
+            const rail2 = new THREE.Mesh(new THREE.BoxGeometry(8, 0.15, 0.15), railMat);
+            rail2.position.set(0, 0.5, -2.7);
+            panelGroup.add(rail2);
+            
+            const rail3 = new THREE.Mesh(new THREE.BoxGeometry(8, 0.15, 0.15), railMat);
+            rail3.position.set(0, -1.5, -2.7);
+            panelGroup.add(rail3);
+            
+            // Create metal edges (hitboxes for Operation mechanic)
+            createMetalEdges(panelGroup);
+            
+            // Screw heads for detail
+            const screwPositions = [
+                [-4.5, 2.5], [4.5, 2.5], [-4.5, -2.5], [4.5, -2.5],
+                [0, 2.5], [0, -2.5], [-2.5, 2.5], [2.5, 2.5]
+            ];
+            
+            screwPositions.forEach(pos => {
+                const screwGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.1, 8);
+                const screwMat = new THREE.MeshStandardMaterial({
+                    color: 0x445566,
+                    metalness: 0.8,
+                    roughness: 0.3
+                });
+                const screw = new THREE.Mesh(screwGeo, screwMat);
+                screw.rotation.x = Math.PI / 2;
+                screw.position.set(pos[0], pos[1], -2.75);
+                panelGroup.add(screw);
+            });
+            
+            // Create ports
+            PORT_CONFIGS.forEach((config, index) => {
+                createPort(config, index, panelGroup);
+            });
+            
+            scene.add(panelGroup);
+            panel = panelGroup;
+        }
+        
+        function createMetalEdges(panelGroup) {
+            // Create invisible edge colliders around port cutouts
+            PORT_CONFIGS.forEach((config, index) => {
+                const edgeGeo = new THREE.TorusGeometry(0.25, 0.08, 8, 16);
+                const edgeMat = new THREE.MeshBasicMaterial({
+                    color: 0x445566,
+                    transparent: true,
+                    opacity: 0.5,
+                    visible: false // Invisible hitbox
+                });
+                const edge = new THREE.Mesh(edgeGeo, edgeMat);
+                edge.position.set(config.pos[0], config.pos[1], -2.85);
+                edge.userData.type = 'metalEdge';
+                edge.userData.portIndex = index;
+                panelGroup.add(edge);
+                metalEdges.push(edge);
+            });
+        }
+        
+        function createPort(config, index, panelGroup) {
+            const portGroup = new THREE.Group();
+            
+            // Circuit breaker body (rectangular, realistic)
+            const breakerGeo = new THREE.BoxGeometry(0.8, 1.2, 0.4);
+            const breakerMat = new THREE.MeshStandardMaterial({
+                color: config.color,
+                metalness: 0.3,
+                roughness: 0.6
+            });
+            const breaker = new THREE.Mesh(breakerGeo, breakerMat);
+            breaker.position.z = -2.7;
+            portGroup.add(breaker);
+            
+            // Switch toggle on breaker
+            const toggleGeo = new THREE.BoxGeometry(0.3, 0.5, 0.2);
+            const toggleMat = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                metalness: 0.4,
+                roughness: 0.5
+            });
+            const toggle = new THREE.Mesh(toggleGeo, toggleMat);
+            toggle.position.z = -2.45;
+            portGroup.add(toggle);
+            
+            // Label on breaker
+            const labelGeo = new THREE.PlaneGeometry(0.5, 0.3);
+            const labelMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.9
+            });
+            const label = new THREE.Mesh(labelGeo, labelMat);
+            label.position.set(0, -0.3, -2.48);
+            portGroup.add(label);
+            
+            // Terminal screw (connection point) - larger for easier interaction
+            const terminalGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.2, 8);
+            const terminalMat = new THREE.MeshStandardMaterial({
+                color: 0xccaa66, // Brass/copper color
+                metalness: 0.9,
+                roughness: 0.2
+            });
+            const terminal = new THREE.Mesh(terminalGeo, terminalMat);
+            terminal.rotation.x = Math.PI / 2;
+            terminal.position.set(0, -0.6, -2.5);
+            terminal.userData.type = 'port';
+            terminal.userData.portIndex = index;
+            terminal.userData.symbol = config.symbol;
+            terminal.userData.color = config.color;
+            terminal.userData.connected = false;
+            terminal.userData.pulsePhase = Math.random() * Math.PI * 2;
+            portGroup.add(terminal);
+            
+            portGroup.position.set(config.pos[0], config.pos[1], 0);
+            panelGroup.add(portGroup);
+            
+            ports.push(terminal);
+        }
+        
+        // ============================================
+        // HALLUCINATION SYSTEM
+        // ============================================
+        
+        function createInitialHallucinations() {
+            // Start with 5 hallucinations around the panel (closer and more visible)
+            const positions = [
+                [-6, 1, -5],    // Left side of panel
+                [6, 1, -5],     // Right side of panel
+                [-4, -2, -6],   // Bottom left
+                [4, -2, -6],    // Bottom right
+                [0, 4, -7]      // Above panel
+            ];
+            
+            positions.forEach((pos, i) => {
+                createHallucination(pos, 0); // Level 0 = wireframe
+            });
+        }
+        
+        function createHallucination(position, level) {
+            const hallucination = {
+                position: new THREE.Vector3(...position),
+                level: level, // 0=wireframe, 1=distorted, 2=aura, 3=character
+                isLookedAt: false,
+                transitionProgress: 0,
+                jitterPhase: Math.random() * Math.PI * 2
+            };
+            
+            // Create hallucination mesh (glitchy form)
+            if (level === 0) {
+                // Wireframe geometric shapes (larger and more visible)
+                const geo = Math.random() > 0.5 
+                    ? new THREE.OctahedronGeometry(0.8, 0)
+                    : new THREE.TetrahedronGeometry(1, 0);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0xff00ff,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.6
+                });
+                hallucination.hallucinationMesh = new THREE.Mesh(geo, mat);
+            } else if (level === 1) {
+                // Distorted abstract shapes (larger)
+                const geo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+                const vertices = geo.attributes.position.array;
+                for (let i = 0; i < vertices.length; i += 3) {
+                    vertices[i] += (Math.random() - 0.5) * 0.6;
+                    vertices[i + 1] += (Math.random() - 0.5) * 0.6;
+                    vertices[i + 2] += (Math.random() - 0.5) * 0.6;
+                }
+                geo.attributes.position.needsUpdate = true;
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0x00ffff,
+                    transparent: true,
+                    opacity: 0.6,
+                    wireframe: true
+                });
+                hallucination.hallucinationMesh = new THREE.Mesh(geo, mat);
+            } else if (level === 2) {
+                // Aura/glow rings (larger and brighter)
+                const geo = new THREE.TorusGeometry(1, 0.2, 8, 16);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0xff0088,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                hallucination.hallucinationMesh = new THREE.Mesh(geo, mat);
+            } else {
+                // Character-like silhouettes (larger and more visible)
+                const bodyGeo = new THREE.BoxGeometry(0.6, 1.8, 0.4);
+                const headGeo = new THREE.SphereGeometry(0.35, 8, 8);
+                const group = new THREE.Group();
+                
+                const bodyMat = new THREE.MeshBasicMaterial({
+                    color: 0x000000,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                const head = new THREE.Mesh(headGeo, bodyMat.clone());
+                head.position.y = 1;
+                
+                group.add(body);
+                group.add(head);
+                hallucination.hallucinationMesh = group;
+            }
+            
+            hallucination.hallucinationMesh.position.copy(hallucination.position);
+            scene.add(hallucination.hallucinationMesh);
+            
+            // Create "real" mundane object mesh
+            const realType = Math.floor(Math.random() * 5);
+            if (realType === 0) {
+                // Street sign
+                const poleGeo = new THREE.CylinderGeometry(0.05, 0.05, 2, 8);
+                const signGeo = new THREE.BoxGeometry(0.8, 0.5, 0.05);
+                const metalMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                const signMat = new THREE.MeshStandardMaterial({ color: 0x2a5a2a });
+                
+                const group = new THREE.Group();
+                const pole = new THREE.Mesh(poleGeo, metalMat);
+                const sign = new THREE.Mesh(signGeo, signMat);
+                sign.position.y = 1;
+                group.add(pole);
+                group.add(sign);
+                hallucination.realMesh = group;
+            } else if (realType === 1) {
+                // Mailbox
+                const boxGeo = new THREE.BoxGeometry(0.5, 0.7, 0.4);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x3366cc });
+                hallucination.realMesh = new THREE.Mesh(boxGeo, mat);
+            } else if (realType === 2) {
+                // Shopping cart wireframe
+                const geo = new THREE.BoxGeometry(0.6, 0.8, 0.9);
+                const mat = new THREE.MeshStandardMaterial({ 
+                    color: 0xcccccc,
+                    wireframe: true
+                });
+                hallucination.realMesh = new THREE.Mesh(geo, mat);
+            } else if (realType === 3) {
+                // Tree silhouette
+                const trunkGeo = new THREE.CylinderGeometry(0.1, 0.15, 1.5, 8);
+                const foliageGeo = new THREE.SphereGeometry(0.8, 8, 8);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3520 });
+                const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2d5016 });
+                
+                const group = new THREE.Group();
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+                foliage.position.y = 1.2;
+                group.add(trunk);
+                group.add(foliage);
+                hallucination.realMesh = group;
+            } else {
+                // Parked car silhouette
+                const bodyGeo = new THREE.BoxGeometry(1.5, 0.6, 0.8);
+                const topGeo = new THREE.BoxGeometry(0.8, 0.4, 0.7);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e });
+                
+                const group = new THREE.Group();
+                const body = new THREE.Mesh(bodyGeo, mat);
+                const top = new THREE.Mesh(topGeo, mat);
+                top.position.y = 0.5;
+                top.position.x = -0.2;
+                group.add(body);
+                group.add(top);
+                hallucination.realMesh = group;
+            }
+            
+            hallucination.realMesh.position.copy(hallucination.position);
+            hallucination.realMesh.visible = false;
+            scene.add(hallucination.realMesh);
+            
+            hallucinations.push(hallucination);
+        }
+        
+        function updateHallucinations(deltaTime) {
+            hallucinations.forEach(hallucination => {
+                // Get camera forward direction
+                const cameraDirection = new THREE.Vector3(0, 0, -1);
+                cameraDirection.applyQuaternion(camera.quaternion);
+                
+                // Direction to hallucination
+                const toHallucination = new THREE.Vector3()
+                    .subVectors(hallucination.position, camera.position)
+                    .normalize();
+                
+                // Dot product (1 = directly looking at, -1 = opposite)
+                const dot = cameraDirection.dot(toHallucination);
+                const threshold = 0.96;
+                
+                const wasLookedAt = hallucination.isLookedAt;
+                hallucination.isLookedAt = dot > threshold;
+                
+                // Transition between hallucination and real
+                if (hallucination.isLookedAt && hallucination.transitionProgress < 1) {
+                    hallucination.transitionProgress += deltaTime * 2.5;
+                    if (hallucination.transitionProgress > 1) hallucination.transitionProgress = 1;
+                } else if (!hallucination.isLookedAt && hallucination.transitionProgress > 0) {
+                    hallucination.transitionProgress -= deltaTime * 3;
+                    if (hallucination.transitionProgress < 0) hallucination.transitionProgress = 0;
+                }
+                
+                // Crossfade opacity
+                const hallucinationOpacity = 1 - hallucination.transitionProgress;
+                const realOpacity = hallucination.transitionProgress;
+                
+                // Update hallucination mesh
+                if (hallucination.hallucinationMesh) {
+                    hallucination.hallucinationMesh.visible = hallucinationOpacity > 0.01;
+                    
+                    // Update material opacity (handle both single meshes and groups)
+                    if (hallucination.hallucinationMesh.traverse) {
+                        hallucination.hallucinationMesh.traverse(child => {
+                            if (child.material) {
+                                if (Array.isArray(child.material)) {
+                                    child.material.forEach(mat => {
+                                        mat.opacity = hallucinationOpacity * (0.5 + hallucination.level * 0.15);
+                                    });
+                                } else {
+                                    child.material.opacity = hallucinationOpacity * (0.5 + hallucination.level * 0.15);
+                                }
+                            }
+                        });
+                    } else if (hallucination.hallucinationMesh.material) {
+                        if (Array.isArray(hallucination.hallucinationMesh.material)) {
+                            hallucination.hallucinationMesh.material.forEach(mat => {
+                                mat.opacity = hallucinationOpacity * (0.5 + hallucination.level * 0.15);
+                            });
+                        } else {
+                            hallucination.hallucinationMesh.material.opacity = hallucinationOpacity * (0.5 + hallucination.level * 0.15);
+                        }
+                    }
+                    
+                    // Jitter effect when not looked at
+                    if (!hallucination.isLookedAt) {
+                        hallucination.jitterPhase += deltaTime * 8;
+                        const jitterX = Math.sin(hallucination.jitterPhase) * 0.05;
+                        const jitterY = Math.cos(hallucination.jitterPhase * 1.3) * 0.05;
+                        hallucination.hallucinationMesh.position.x = hallucination.position.x + jitterX;
+                        hallucination.hallucinationMesh.position.y = hallucination.position.y + jitterY;
+                    } else {
+                        hallucination.hallucinationMesh.position.copy(hallucination.position);
+                    }
+                    
+                    // Rotation
+                    hallucination.hallucinationMesh.rotation.y += deltaTime * 0.5;
+                    if (hallucination.level === 2) {
+                        hallucination.hallucinationMesh.rotation.x += deltaTime * 0.7;
+                    }
+                }
+                
+                // Update real mesh
+                if (hallucination.realMesh) {
+                    hallucination.realMesh.visible = realOpacity > 0.01;
+                    
+                    if (hallucination.realMesh.traverse) {
+                        hallucination.realMesh.traverse(child => {
+                            if (child.material) {
+                                if (!child.material.transparent) {
+                                    child.material.transparent = true;
+                                }
+                                child.material.opacity = realOpacity;
+                            }
+                        });
+                    } else if (hallucination.realMesh.material) {
+                        // Handle single mesh
+                        if (!hallucination.realMesh.material.transparent) {
+                            hallucination.realMesh.material.transparent = true;
+                        }
+                        hallucination.realMesh.material.opacity = realOpacity;
+                    }
+                }
+            });
+        }
+        
+        function spawnNewHallucination() {
+            // Spawn in random peripheral position (closer to panel)
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 5 + Math.random() * 3;  // Closer
+            const x = Math.sin(angle) * distance;
+            const z = -4 - Math.random() * 4;  // Closer to panel
+            const y = -2 + Math.random() * 6;
+            
+            // Escalate level based on mistakes
+            let level = 0;
+            if (mistakes > 3) level = 1;
+            if (mistakes > 7) level = 2;
+            if (mistakes > 12) level = 3;
+            
+            createHallucination([x, y, z], level);
+        }
+        
+        // ============================================
+        // ENVIRONMENTAL SHAPES (SPAWNED ON MISTAKES)
+        // ============================================
+        
+        function spawnEnvironmentalShapes(count) {
+            for (let i = 0; i < count; i++) {
+                // Spawn shapes around the panel periphery (not blocking center view)
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 6 + Math.random() * 4; // Around the edges
+                const x = Math.sin(angle) * distance;
+                const z = -3 + Math.cos(angle) * distance;
+                const y = -2 + Math.random() * 6; // Vertical spread
+                
+                const shapeType = Math.floor(Math.random() * 6);
+                let geometry;
+                
+                switch(shapeType) {
+                    case 0:
+                        geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+                        break;
+                    case 1:
+                        geometry = new THREE.TetrahedronGeometry(0.6, 0);
+                        break;
+                    case 2:
+                        geometry = new THREE.OctahedronGeometry(0.7, 0);
+                        break;
+                    case 3:
+                        geometry = new THREE.IcosahedronGeometry(0.6, 0);
+                        break;
+                    case 4:
+                        geometry = new THREE.TorusGeometry(0.5, 0.2, 8, 16);
+                        break;
+                    case 5:
+                        geometry = new THREE.ConeGeometry(0.5, 1, 8);
+                        break;
+                }
+                
+                const isWireframe = Math.random() > 0.5;
+                const colors = [0xff0088, 0x00ffff, 0xff6600, 0x00ff44, 0xffaa00, 0x8800ff];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    wireframe: isWireframe,
+                    transparent: true,
+                    opacity: 0.6,
+                    emissive: color,
+                    emissiveIntensity: 0.3
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, z);
+                mesh.rotation.set(
+                    Math.random() * Math.PI * 2,
+                    Math.random() * Math.PI * 2,
+                    Math.random() * Math.PI * 2
+                );
+                
+                mesh.userData = {
+                    type: 'environmentalShape',
+                    rotationSpeed: {
+                        x: (Math.random() - 0.5) * 0.02,
+                        y: (Math.random() - 0.5) * 0.02,
+                        z: (Math.random() - 0.5) * 0.02
+                    },
+                    driftSpeed: {
+                        x: (Math.random() - 0.5) * 0.01,
+                        y: (Math.random() - 0.5) * 0.01
+                    },
+                    pulsePhase: Math.random() * Math.PI * 2,
+                    originalPosition: mesh.position.clone(),
+                    glitchTimer: 0,
+                    tradeTarget: null
+                };
+                
+                scene.add(mesh);
+                environmentalShapes.push(mesh);
+            }
+        }
+        
+        function updateEnvironmentalShapes(deltaTime) {
+            environmentalShapes.forEach((shape, index) => {
+                // Rotation
+                shape.rotation.x += shape.userData.rotationSpeed.x;
+                shape.rotation.y += shape.userData.rotationSpeed.y;
+                shape.rotation.z += shape.userData.rotationSpeed.z;
+                
+                // Pulse opacity
+                shape.userData.pulsePhase += deltaTime * 2;
+                const pulse = Math.sin(shape.userData.pulsePhase) * 0.2 + 0.8;
+                shape.material.opacity = 0.6 * pulse;
+                
+                if (shapesGlitching) {
+                    // GLITCH & TRADE BEHAVIOR (when 3 wires remain)
+                    shape.userData.glitchTimer += deltaTime;
+                    
+                    // Random teleport glitch
+                    if (Math.random() < 0.01) {
+                        const glitchOffset = {
+                            x: (Math.random() - 0.5) * 0.5,
+                            y: (Math.random() - 0.5) * 0.5,
+                            z: (Math.random() - 0.5) * 0.5
+                        };
+                        shape.position.x = shape.userData.originalPosition.x + glitchOffset.x;
+                        shape.position.y = shape.userData.originalPosition.y + glitchOffset.y;
+                        shape.position.z = shape.userData.originalPosition.z + glitchOffset.z;
+                    }
+                    
+                    // Trading positions with other shapes
+                    if (shape.userData.glitchTimer > 2 && !shape.userData.tradeTarget && Math.random() < 0.05) {
+                        // Find another shape to trade with
+                        const otherShapes = environmentalShapes.filter(s => s !== shape && !s.userData.tradeTarget);
+                        if (otherShapes.length > 0) {
+                            const target = otherShapes[Math.floor(Math.random() * otherShapes.length)];
+                            
+                            // Initiate trade
+                            shape.userData.tradeTarget = target;
+                            target.userData.tradeTarget = shape;
+                            
+                            shape.userData.tradeProgress = 0;
+                            target.userData.tradeProgress = 0;
+                            
+                            shape.userData.tradeStartPos = shape.position.clone();
+                            target.userData.tradeStartPos = target.position.clone();
+                            
+                            shape.userData.glitchTimer = 0;
+                            target.userData.glitchTimer = 0;
+                        }
+                    }
+                    
+                    // Execute trade animation
+                    if (shape.userData.tradeTarget && shape.userData.tradeProgress !== undefined) {
+                        shape.userData.tradeProgress += deltaTime * 2;
+                        
+                        if (shape.userData.tradeProgress >= 1) {
+                            // Complete trade - snap to positions
+                            const targetFinalPos = shape.userData.tradeTarget.userData.tradeStartPos.clone();
+                            shape.position.copy(targetFinalPos);
+                            shape.userData.originalPosition.copy(targetFinalPos);
+                            
+                            // Clear trade
+                            shape.userData.tradeTarget.userData.tradeTarget = null;
+                            shape.userData.tradeTarget.userData.tradeProgress = undefined;
+                            shape.userData.tradeTarget = null;
+                            shape.userData.tradeProgress = undefined;
+                        } else {
+                            // Interpolate position (only move one shape, the other moves via its own update)
+                            const t = shape.userData.tradeProgress;
+                            const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease-in-out
+                            
+                            const targetPos = shape.userData.tradeTarget.userData.tradeStartPos;
+                            shape.position.lerpVectors(shape.userData.tradeStartPos, targetPos, eased);
+                            
+                            // Add glitch jitter during trade
+                            shape.position.x += (Math.random() - 0.5) * 0.1;
+                            shape.position.y += (Math.random() - 0.5) * 0.1;
+                        }
+                    } else if (!shape.userData.tradeTarget) {
+                        // Erratic drift when glitching
+                        shape.position.x += shape.userData.driftSpeed.x * 3;
+                        shape.position.y += shape.userData.driftSpeed.y * 3;
+                        
+                        // Random direction changes
+                        if (Math.random() < 0.02) {
+                            shape.userData.driftSpeed.x = (Math.random() - 0.5) * 0.02;
+                            shape.userData.driftSpeed.y = (Math.random() - 0.5) * 0.02;
+                        }
+                    }
+                    
+                    // Faster rotation when glitching
+                    shape.rotation.x += shape.userData.rotationSpeed.x * 3;
+                    shape.rotation.y += shape.userData.rotationSpeed.y * 3;
+                    
+                    // Flicker wireframe state
+                    if (Math.random() < 0.05) {
+                        shape.material.wireframe = !shape.material.wireframe;
+                    }
+                } else {
+                    // Normal gentle drift
+                    shape.position.x = shape.userData.originalPosition.x + Math.sin(shape.userData.pulsePhase * 0.5) * 0.2;
+                    shape.position.y = shape.userData.originalPosition.y + Math.cos(shape.userData.pulsePhase * 0.3) * 0.15;
+                }
+            });
+        }
+        
+        // ============================================
+        // WIRE CREATION
+        // ============================================
+        
+        function createWires() {
+            // Create 10 loose wires at the bottom, realistic electrical wire colors
+            const wireStartY = -3;
+            const wireStartPositions = [
+                [-4.2, wireStartY], [-3.4, wireStartY], [-2.6, wireStartY], [-1.8, wireStartY], [-1, wireStartY],
+                [-0.2, wireStartY], [0.6, wireStartY], [1.4, wireStartY], [2.2, wireStartY], [3, wireStartY]
+            ];
+            
+            wireStartPositions.forEach((startPos, index) => {
+                const targetPort = ports[index];
+                const wire = {
+                    id: index,
+                    color: targetPort.userData.color,
+                    symbol: targetPort.userData.symbol,
+                    targetPortIndex: index,
+                    connected: false,
+                    grabbed: false,
+                    swayPhase: Math.random() * Math.PI * 2
+                };
+                
+                // Wire start (fixed point - bundle at bottom)
+                const anchorGeo = new THREE.SphereGeometry(0.06, 8, 8);
+                const anchorMat = new THREE.MeshStandardMaterial({
+                    color: 0x334455,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                wire.anchor = new THREE.Mesh(anchorGeo, anchorMat);
+                wire.anchor.position.set(startPos[0], startPos[1], -2.8);
+                scene.add(wire.anchor);
+                
+                // Wire end (draggable) - copper tip (larger for easier grabbing)
+                const endGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.25, 8);
+                const endMat = new THREE.MeshStandardMaterial({
+                    color: 0xcc8866, // Copper wire tip
+                    metalness: 0.8,
+                    roughness: 0.3
+                });
+                wire.endpoint = new THREE.Mesh(endGeo, endMat);
+                wire.endpoint.rotation.x = Math.PI / 2;
+                wire.endpoint.position.set(startPos[0], startPos[1] - 0.8, -2.3);
+                wire.endpoint.userData.type = 'wireEnd';
+                wire.endpoint.userData.wireId = index;
+                scene.add(wire.endpoint);
+                
+                // Wire insulation sleeve near tip
+                const sleeveGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 8);
+                const sleeveMat = new THREE.MeshStandardMaterial({
+                    color: wire.color,
+                    metalness: 0.1,
+                    roughness: 0.7
+                });
+                wire.sleeve = new THREE.Mesh(sleeveGeo, sleeveMat);
+                wire.sleeve.rotation.x = Math.PI / 2;
+                wire.sleeve.position.set(startPos[0], startPos[1] - 0.6, -2.5);
+                scene.add(wire.sleeve);
+                
+                // Wire line (thicker, more visible)
+                const points = [
+                    wire.anchor.position.clone(),
+                    wire.endpoint.position.clone()
+                ];
+                const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: wire.color,
+                    transparent: false,
+                    opacity: 1,
+                    linewidth: 3
+                });
+                wire.line = new THREE.Line(lineGeo, lineMat);
+                scene.add(wire.line);
+                
+                wires.push(wire);
+            });
+        }
+        
+        // ============================================
+        // CONTROLS (LOOK ONLY - NO WASD MOVEMENT)
+        // ============================================
+        
+        function setupControls() {
+            document.addEventListener('keydown', (e) => {
+                if (e.key.toLowerCase() === 'e' && isPointerLocked) {
+                    handleInteraction();
+                }
+            });
+            
+            document.addEventListener('click', () => {
+                if (!isPointerLocked) {
+                    renderer.domElement.requestPointerLock();
+                } else {
+                    handleInteraction();
+                }
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === renderer.domElement;
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isPointerLocked) {
+                    // Only allow looking around - camera POSITION stays at (0,0,6)
+                    mouseX += e.movementX * 0.001;
+                    mouseY += e.movementY * 0.001;
+                    mouseY = Math.max(-0.6, Math.min(0.6, mouseY)); // Wider vertical look range
+                    mouseX = Math.max(-0.5, Math.min(0.5, mouseX)); // Wider horizontal look range
+                }
+            });
+        }
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+        
+        // ============================================
+        // INTERACTION
+        // ============================================
+        
+        function handleInteraction() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            
+            const interactables = [];
+            wires.forEach(w => {
+                if (!w.connected) {
+                    interactables.push(w.endpoint);
+                }
+            });
+            ports.forEach(p => interactables.push(p));
+            
+            const intersects = raycaster.intersectObjects(interactables, true); // Check children too
+            
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                
+                if (obj.userData.type === 'wireEnd' && !grabbedWire) {
+                    // Grab wire
+                    const wire = wires[obj.userData.wireId];
+                    if (!wire.connected) {
+                        grabbedWire = wire;
+                        wire.grabbed = true;
+                    }
+                } else if (obj.userData.type === 'port' && grabbedWire) {
+                    // Try to connect
+                    if (obj.userData.portIndex === grabbedWire.targetPortIndex) {
+                        // Correct connection!
+                        connectWire(grabbedWire, obj);
+                        grabbedWire.grabbed = false;
+                        grabbedWire = null;
+                    } else {
+                        // Wrong port - mistake!
+                        triggerMistake("wrong port");
+                    }
+                }
+            } else if (grabbedWire) {
+                // Release wire
+                grabbedWire.grabbed = false;
+                grabbedWire = null;
+            }
+        }
+        
+        function connectWire(wire, portMesh) {
+            wire.connected = true;
+            portMesh.userData.connected = true;
+            
+            // Snap to port
+            wire.endpoint.position.copy(portMesh.position);
+            wire.endpoint.position.z = -2.83;
+            
+            connections++;
+            updateConnectionUI();
+            
+            // Visual feedback
+            wire.endpoint.material.emissiveIntensity = 1.5;
+            portMesh.material.emissiveIntensity = 1.5;
+            
+            setTimeout(() => {
+                wire.endpoint.material.emissiveIntensity = 0.6;
+                portMesh.material.emissiveIntensity = 0.4;
+            }, 200);
+            
+            // Chat reaction
+            const phase = connections < 5 ? 'success' : connections < 9 ? 'pressure' : 'final';
+            setTimeout(() => {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    chatPhases[phase][Math.floor(Math.random() * chatPhases[phase].length)]
+                );
+            }, 300);
+            
+            incrementViewers(2);
+            
+            // Activate glitching when 3 or fewer wires remain
+            if (totalConnections - connections <= 3 && !shapesGlitching && environmentalShapes.length > 0) {
+                shapesGlitching = true;
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "wait why is everything moving 👁️"
+                );
+            }
+            
+            // Check win condition
+            if (connections >= totalConnections) {
+                setTimeout(() => {
+                    showInstruction("all connections complete", 3000);
+                    addChatMessage('st1ll_h3r3', "they did it 👁️");
+                    setTimeout(() => {
+                        addChatMessage('xX_sc3ne_xX', "steady hands");
+                        setTimeout(() => {
+                            showInstruction("still together", 0);
+                        }, 2000);
+                    }, 1500);
+                }, 1000);
+            }
+        }
+        
+        function triggerMistake(reason) {
+            mistakes++;
+            updateMistakeUI();
+            
+            // Screen flash (red)
+            const flash = document.createElement('div');
+            flash.style.position = 'fixed';
+            flash.style.top = '0';
+            flash.style.left = '0';
+            flash.style.width = '100%';
+            flash.style.height = '100%';
+            flash.style.background = 'rgba(255, 50, 50, 0.4)';
+            flash.style.pointerEvents = 'none';
+            flash.style.zIndex = '999';
+            document.body.appendChild(flash);
+            
+            setTimeout(() => {
+                flash.style.opacity = '0';
+                flash.style.transition = 'opacity 0.2s';
+                setTimeout(() => flash.remove(), 200);
+            }, 100);
+            
+            // Camera shake
+            cameraShakeAmount = 0.05;
+            
+            // Spark effect
+            if (grabbedWire) {
+                createSpark(grabbedWire.endpoint.position, grabbedWire.color);
+            }
+            
+            // Chat reaction
+            addChatMessage(
+                usernames[Math.floor(Math.random() * usernames.length)],
+                chatPhases.mistake[Math.floor(Math.random() * chatPhases.mistake.length)]
+            );
+            
+            // Increase viewers on mistake
+            incrementViewers(5);
+            
+            // Spawn new hallucination on mistake
+            if (mistakes % 2 === 0) { // Every 2 mistakes
+                spawnNewHallucination();
+            }
+            
+            // Spawn environmental shapes on every mistake (increasingly overwhelming)
+            const shapesToSpawn = 2 + Math.floor(mistakes / 3); // More shapes as mistakes increase
+            spawnEnvironmentalShapes(shapesToSpawn);
+            
+            // Activate glitching when 3 or fewer wires remain
+            if (totalConnections - connections <= 3 && !shapesGlitching) {
+                shapesGlitching = true;
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "everything's breaking apart 😰"
+                );
+            }
+        }
+        
+        function createSpark(position, color) {
+            for (let i = 0; i < 5; i++) {
+                const sparkGeo = new THREE.SphereGeometry(0.03, 4, 4);
+                const sparkMat = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 1
+                });
+                const spark = new THREE.Mesh(sparkGeo, sparkMat);
+                spark.position.copy(position);
+                spark.position.x += (Math.random() - 0.5) * 0.2;
+                spark.position.y += (Math.random() - 0.5) * 0.2;
+                spark.position.z += (Math.random() - 0.5) * 0.1;
+                scene.add(spark);
+                
+                let life = 0;
+                const sparkInterval = setInterval(() => {
+                    life += 0.1;
+                    spark.material.opacity = 1 - life;
+                    spark.position.y -= 0.02;
+                    
+                    if (life >= 1) {
+                        clearInterval(sparkInterval);
+                        scene.remove(spark);
+                    }
+                }, 50);
+            }
+        }
+        
+        // ============================================
+        // UPDATE LOGIC
+        // ============================================
+        
+        function updateWires(deltaTime) {
+            wires.forEach(wire => {
+                if (wire.connected) return;
+                
+                // Sway animation when not grabbed
+                if (!wire.grabbed) {
+                    wire.swayPhase += deltaTime * 0.8;
+                    const swayX = Math.sin(wire.swayPhase) * 0.05;
+                    const swayY = Math.sin(wire.swayPhase * 0.7) * 0.03;
+                    wire.endpoint.position.x = wire.anchor.position.x + swayX;
+                    wire.endpoint.position.y = wire.anchor.position.y - 0.8 + swayY;
+                    wire.sleeve.position.x = wire.anchor.position.x + swayX;
+                    wire.sleeve.position.y = wire.anchor.position.y - 0.6 + swayY;
+                }
+                
+                // Update dragged wire position
+                if (wire.grabbed && grabbedWire === wire) {
+                    const direction = new THREE.Vector3(0, 0, -1);
+                    direction.applyQuaternion(camera.quaternion);
+                    
+                    // Raycast to plane at panel depth
+                    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 2.8);
+                    const intersectPoint = new THREE.Vector3();
+                    raycaster.ray.intersectPlane(plane, intersectPoint);
+                    
+                    if (intersectPoint) {
+                        // Add tremor if viewer count is high
+                        const tremor = viewerCount > 150 ? (Math.random() - 0.5) * 0.02 : 0;
+                        wire.endpoint.position.x = intersectPoint.x + tremor;
+                        wire.endpoint.position.y = intersectPoint.y + tremor;
+                        wire.endpoint.position.z = intersectPoint.z;
+                        
+                        // Move sleeve near endpoint
+                        wire.sleeve.position.x = intersectPoint.x + tremor;
+                        wire.sleeve.position.y = intersectPoint.y + tremor + 0.2;
+                        wire.sleeve.position.z = intersectPoint.z;
+                        
+                        // Check collision with metal edges
+                        checkMetalEdgeCollision(wire);
+                    }
+                }
+                
+                // Update wire line
+                updateWireLine(wire);
+            });
+        }
+        
+        function checkMetalEdgeCollision(wire) {
+            metalEdges.forEach(edge => {
+                const dist = wire.endpoint.position.distanceTo(edge.position);
+                if (dist < 0.25 && dist > 0.15) {
+                    // Touching the metal edge ring - mistake!
+                    if (Math.random() < 0.05) { // Small chance per frame to avoid spam
+                        triggerMistake("touched metal edge");
+                        // Push wire away slightly
+                        const direction = new THREE.Vector3()
+                            .subVectors(wire.endpoint.position, edge.position)
+                            .normalize();
+                        wire.endpoint.position.add(direction.multiplyScalar(0.1));
+                    }
+                }
+            });
+        }
+        
+        function updateWireLine(wire) {
+            const points = [
+                wire.anchor.position.clone(),
+                wire.endpoint.position.clone()
+            ];
+            wire.line.geometry.setFromPoints(points);
+        }
+        
+        function updatePorts(deltaTime) {
+            ports.forEach(port => {
+                if (port.userData.connected) return;
+                
+                // Pulsing glow on unconnected ports
+                port.userData.pulsePhase += deltaTime * 1.5;
+                const pulse = Math.sin(port.userData.pulsePhase) * 0.2 + 0.8;
+                port.material.emissiveIntensity = 0.4 * pulse;
+            });
+        }
+        
+        function updateCamera(deltaTime) {
+            // CAMERA POSITION IS FIXED AT (0, 0, 0) - ONLY ROTATION CHANGES
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = -mouseX;
+            camera.rotation.x = -mouseY;
+            
+            // Camera shake from mistakes
+            if (cameraShakeAmount > 0) {
+                camera.rotation.x += (Math.random() - 0.5) * cameraShakeAmount;
+                camera.rotation.y += (Math.random() - 0.5) * cameraShakeAmount;
+                cameraShakeAmount *= 0.9;
+                if (cameraShakeAmount < 0.001) cameraShakeAmount = 0;
+            }
+        }
+        
+        function updateHoveredObject() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            
+            const interactables = [];
+            wires.forEach(w => {
+                if (!w.connected) interactables.push(w.endpoint);
+            });
+            ports.forEach(p => interactables.push(p));
+            
+            const intersects = raycaster.intersectObjects(interactables, false);
+            
+            // Reset previous hover
+            if (hoveredObject) {
+                if (hoveredObject.scale) {
+                    hoveredObject.scale.setScalar(1);
+                }
+                if (hoveredObject.material && hoveredObject.userData.type === 'port') {
+                    hoveredObject.material.emissive.setHex(0x000000);
+                    hoveredObject.material.emissiveIntensity = 0;
+                } else if (hoveredObject.material && hoveredObject.userData.type === 'wireEnd') {
+                    hoveredObject.material.emissive.setHex(0x000000);
+                    hoveredObject.material.emissiveIntensity = 0;
+                }
+            }
+            
+            // Set new hover
+            if (intersects.length > 0) {
+                hoveredObject = intersects[0].object;
+                if (hoveredObject.scale) {
+                    hoveredObject.scale.setScalar(1.3);
+                }
+                // Add glow to hovered objects
+                if (hoveredObject.material && hoveredObject.userData.type === 'port') {
+                    hoveredObject.material.emissive.setHex(0x00ffff);
+                    hoveredObject.material.emissiveIntensity = 0.5;
+                } else if (hoveredObject.material && hoveredObject.userData.type === 'wireEnd') {
+                    hoveredObject.material.emissive.setHex(0xffaa00);
+                    hoveredObject.material.emissiveIntensity = 0.6;
+                }
+            } else {
+                hoveredObject = null;
+            }
+        }
+        
+        function updateLightning(deltaTime) {
+            lightningTimer -= deltaTime;
+            
+            if (lightningTimer <= 0) {
+                lastLightningTime = Date.now();
+                
+                const flash = document.createElement('div');
+                flash.style.position = 'fixed';
+                flash.style.top = '0';
+                flash.style.left = '0';
+                flash.style.width = '100%';
+                flash.style.height = '100%';
+                flash.style.background = 'rgba(200, 220, 255, 0.3)';
+                flash.style.pointerEvents = 'none';
+                flash.style.zIndex = '999';
+                document.body.appendChild(flash);
+                
+                setTimeout(() => {
+                    flash.style.opacity = '0';
+                    flash.style.transition = 'opacity 0.2s';
+                    setTimeout(() => flash.remove(), 200);
+                }, 80);
+                
+                lightningTimer = 5 + Math.random() * 10;
+            }
+        }
+        
+        // ============================================
+        // UI & CHAT
+        // ============================================
+        
+        function addChatMessage(username, message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            messageDiv.innerHTML = `<span class="username">${username}:</span>${message}`;
+            chatContainer.appendChild(messageDiv);
+            
+            while (chatContainer.children.length > 6) {
+                chatContainer.removeChild(chatContainer.firstChild);
+            }
+            
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.style.transition = 'opacity 1s';
+                    messageDiv.style.opacity = '0';
+                    setTimeout(() => messageDiv.remove(), 1000);
+                }
+            }, 8000);
+        }
+        
+        function incrementViewers(amount) {
+            viewerCount += amount;
+            viewerCount = Math.min(viewerCount, 250);
+            document.getElementById('viewCount').textContent = `LIVE • ${viewerCount} viewers`;
+        }
+        
+        function updateConnectionUI() {
+            document.getElementById('connectionCount').textContent = `${connections} / ${totalConnections}`;
+        }
+        
+        function updateMistakeUI() {
+            document.getElementById('mistakeCount').textContent = mistakes;
+        }
+        
+        let currentInstruction = null;
+        
+        function showInstruction(html, duration = 0) {
+            if (currentInstruction) {
+                currentInstruction.remove();
+            }
+            
+            const instruction = document.createElement('div');
+            instruction.className = 'instruction-text';
+            instruction.innerHTML = html;
+            document.getElementById('ui-layer').appendChild(instruction);
+            currentInstruction = instruction;
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    if (currentInstruction === instruction) {
+                        instruction.style.transition = 'opacity 0.5s';
+                        instruction.style.opacity = '0';
+                        setTimeout(() => instruction.remove(), 500);
+                        currentInstruction = null;
+                    }
+                }, duration);
+            }
+        }
+        
+        // ============================================
+        // ANIMATION LOOP
+        // ============================================
+        
+        let lastChatTime = Date.now();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = clock.getDelta();
+            const now = Date.now();
+            
+            updateCamera(deltaTime); // Only rotation, no position change
+            updateWires(deltaTime);
+            updatePorts(deltaTime);
+            updateHoveredObject();
+            updateLightning(deltaTime);
+            updateHallucinations(deltaTime);
+            updateEnvironmentalShapes(deltaTime);
+            
+            // Random chat
+            const timeSinceChat = now - lastChatTime;
+            const chatInterval = viewerCount > 150 ? 2000 : 4000;
+            
+            if (timeSinceChat > chatInterval + Math.random() * 2000) {
+                const phase = viewerCount > 150 ? 'pressure' : connections < 3 ? 'start' : 'success';
+                const messages = chatPhases[phase];
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    messages[Math.floor(Math.random() * messages.length)]
+                );
+                lastChatTime = now;
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // ============================================
+        // INIT
+        // ============================================
+        
+        window.addEventListener('load', () => {
+            document.body.style.opacity = '0';
+            document.body.style.transition = 'opacity 1s';
+            
+            initThreeJS();
+            animate();
+            
+            setTimeout(() => {
+                document.body.style.opacity = '1';
+                showInstruction("click to lock cursor • look at wire ends and click or press E to grab", 4000);
+                setTimeout(() => {
+                    addChatMessage('w4tch1ng_u', "let's see if they can do it");
+                }, 2000);
+            }, 100);
+        });
+    </script>
+</body>
+</html>

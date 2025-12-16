@@ -130,6 +130,75 @@
                 opacity: 1;
             }
         }
+        
+        #paperOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            transition: background 1s ease;
+        }
+        
+        #paperOverlay.active {
+            display: flex;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+        }
+        
+        #paperContent {
+            background: #f5f5dc;
+            padding: 60px;
+            border-radius: 5px;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.7);
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            line-height: 1.8;
+            color: #333;
+            max-width: 600px;
+            text-align: center;
+            transform: scale(0.8);
+            opacity: 0;
+            transition: transform 0.5s ease, opacity 0.5s ease;
+        }
+        
+        #paperContent.visible {
+            transform: scale(1);
+            opacity: 1;
+        }
+        
+        .paper-text {
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .paper-text.bleed {
+            filter: blur(2px);
+            transform: translateY(10px) scale(1.1);
+            opacity: 0;
+        }
+        
+        #fadeTransition {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 300;
+            transition: opacity 2s ease;
+        }
+        
+        #fadeTransition.active {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -146,6 +215,12 @@
         <div class="chat-container" id="chatContainer"></div>
     </div>
     
+    <div id="paperOverlay">
+        <div id="paperContent"></div>
+    </div>
+    
+    <div id="fadeTransition"></div>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     
     <script>
@@ -157,11 +232,33 @@
         let clock = new THREE.Clock();
         let viewerCount = 6;
         let puzzleObjects = [];
+        let rainParticles = [];
+        let puddles = [];
+        let lightningTimer = 0;
         let gameState = {
             puzzlesSolved: 0,
             totalPuzzles: 5,
             startTime: Date.now()
         };
+        
+        // Heatmap system
+        let heatmapGrid = {}; // key: "x,z" -> visit count
+        let heatmapTimer = 0;
+        let heatmapUpdateInterval = 0.3;
+        let showHeatmap = false;
+        let heatmapMesh = null;
+        let memoryMarks = [];
+        let totalSteps = 0;
+        let heatmapCentroid = new THREE.Vector2(0, 0);
+        let lastGazeObject = null;
+        let gazeRepeatCount = {}; // object id -> count
+        
+        // Paper airplane event
+        let cumulativeMovementTime = 0;
+        let paperAirplaneTriggered = false;
+        let paperAirplane = null;
+        let playerLocked = false;
+        let eventInProgress = false;
         
         const usernames = [
             'xX_sc3ne_xX', 'luv2c0nc3al', '2bh', 'dinonugget', '2getreal', 
@@ -314,6 +411,9 @@
             // Create puzzles similar to Phase 1
             createDisorientingPuzzles();
             
+            // Create rain effect
+            createRainSystem();
+            
             showInstruction("people are watching you", 3000);
             setTimeout(() => {
                 showInstruction("solve the puzzles while they watch", 5000);
@@ -348,10 +448,173 @@
                 mesh.userData.activatedTime = 0;
                 mesh.userData.numberCycle = 0;
                 mesh.userData.lastNumberChange = Date.now();
+                mesh.userData.glitchTimer = Math.random() * 5;
+                mesh.userData.isGlitching = false;
+                mesh.userData.wasLookingAt = false;
                 
                 scene.add(mesh);
                 puzzleObjects.push(mesh);
             });
+        }
+        
+        // ============================================
+        // RAIN & STORM SYSTEM
+        // ============================================
+        
+        function createRainSystem() {
+            // Create rain particles
+            const rainCount = 1000;
+            const rainGeometry = new THREE.BufferGeometry();
+            const rainPositions = new Float32Array(rainCount * 3);
+            const rainVelocities = [];
+            
+            for (let i = 0; i < rainCount; i++) {
+                const i3 = i * 3;
+                rainPositions[i3] = (Math.random() - 0.5) * 50;
+                rainPositions[i3 + 1] = Math.random() * 15;
+                rainPositions[i3 + 2] = (Math.random() - 0.5) * 50;
+                
+                rainVelocities.push({
+                    x: (Math.random() - 0.5) * 0.5,
+                    y: -8 - Math.random() * 4,
+                    z: (Math.random() - 0.5) * 0.5
+                });
+            }
+            
+            rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+            
+            const rainMaterial = new THREE.PointsMaterial({
+                color: 0x8899bb,
+                size: 0.1,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const rain = new THREE.Points(rainGeometry, rainMaterial);
+            rain.userData.velocities = rainVelocities;
+            scene.add(rain);
+            rainParticles.push(rain);
+        }
+        
+        function updateRain(deltaTime) {
+            rainParticles.forEach(rain => {
+                const positions = rain.geometry.attributes.position.array;
+                const velocities = rain.userData.velocities;
+                
+                for (let i = 0; i < positions.length / 3; i++) {
+                    const i3 = i * 3;
+                    
+                    // Update position
+                    positions[i3] += velocities[i].x * deltaTime;
+                    positions[i3 + 1] += velocities[i].y * deltaTime;
+                    positions[i3 + 2] += velocities[i].z * deltaTime;
+                    
+                    // Reset raindrop if it hits the floor
+                    if (positions[i3 + 1] <= 0.1) {
+                        // Create puddle occasionally
+                        if (Math.random() < 0.05 && puddles.length < 30) {
+                            createPuddle(positions[i3], positions[i3 + 2]);
+                        }
+                        
+                        // Reset raindrop
+                        positions[i3] = (Math.random() - 0.5) * 50;
+                        positions[i3 + 1] = 12 + Math.random() * 3;
+                        positions[i3 + 2] = (Math.random() - 0.5) * 50;
+                    }
+                }
+                
+                rain.geometry.attributes.position.needsUpdate = true;
+            });
+        }
+        
+        function createPuddle(x, z) {
+            const puddleGeometry = new THREE.CircleGeometry(0.3 + Math.random() * 0.4, 8);
+            const puddleMaterial = new THREE.MeshStandardMaterial({
+                color: 0x334455,
+                transparent: true,
+                opacity: 0.7,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            
+            const puddle = new THREE.Mesh(puddleGeometry, puddleMaterial);
+            puddle.rotation.x = -Math.PI / 2;
+            puddle.position.set(x, 0.01, z);
+            puddle.userData.createdTime = Date.now();
+            puddle.userData.lifetime = 8000 + Math.random() * 4000; // 8-12 seconds
+            
+            scene.add(puddle);
+            puddles.push(puddle);
+        }
+        
+        function updatePuddles() {
+            const now = Date.now();
+            for (let i = puddles.length - 1; i >= 0; i--) {
+                const puddle = puddles[i];
+                const age = now - puddle.userData.createdTime;
+                
+                // Fade out puddle near end of lifetime
+                if (age > puddle.userData.lifetime) {
+                    scene.remove(puddle);
+                    puddles.splice(i, 1);
+                } else if (age > puddle.userData.lifetime - 2000) {
+                    const fadeProgress = (age - (puddle.userData.lifetime - 2000)) / 2000;
+                    puddle.material.opacity = 0.7 * (1 - fadeProgress);
+                }
+            }
+        }
+        
+        function updateLightning(deltaTime) {
+            lightningTimer -= deltaTime;
+            
+            if (lightningTimer <= 0) {
+                // Lightning strike!
+                const flash = document.createElement('div');
+                flash.style.position = 'fixed';
+                flash.style.top = '0';
+                flash.style.left = '0';
+                flash.style.width = '100%';
+                flash.style.height = '100%';
+                flash.style.background = 'rgba(200, 220, 255, 0.4)';
+                flash.style.pointerEvents = 'none';
+                flash.style.zIndex = '999';
+                document.body.appendChild(flash);
+                
+                // Brighten scene lights
+                const ambientLight = scene.children.find(obj => obj instanceof THREE.AmbientLight);
+                if (ambientLight) {
+                    const originalIntensity = ambientLight.intensity;
+                    ambientLight.intensity = 1.5;
+                    setTimeout(() => {
+                        ambientLight.intensity = originalIntensity;
+                    }, 100);
+                }
+                
+                setTimeout(() => {
+                    flash.style.opacity = '0';
+                    flash.style.transition = 'opacity 0.2s';
+                    setTimeout(() => flash.remove(), 200);
+                }, 80);
+                
+                // Random lightning interval (4-12 seconds)
+                lightningTimer = 4 + Math.random() * 8;
+                
+                // Add occasional chat reaction to lightning
+                if (Math.random() < 0.3) {
+                    setTimeout(() => {
+                        const lightningMessages = [
+                            "did you see that flash",
+                            "thunder",
+                            "storm's getting worse",
+                            "that was bright"
+                        ];
+                        addChatMessage(
+                            usernames[Math.floor(Math.random() * usernames.length)],
+                            lightningMessages[Math.floor(Math.random() * lightningMessages.length)]
+                        );
+                    }, 500);
+                }
+            }
         }
         
         // ============================================
@@ -366,6 +629,13 @@
             document.addEventListener('keydown', (e) => {
                 const key = e.key.toLowerCase();
                 if (keys.hasOwnProperty(key)) keys[key] = true;
+                
+                // Toggle heatmap debug view
+                if (key === 'h') {
+                    showHeatmap = !showHeatmap;
+                    logMessage(showHeatmap ? 'HEATMAP: VISIBLE' : 'HEATMAP: HIDDEN');
+                    updateHeatmapVisualization();
+                }
             });
             
             document.addEventListener('keyup', (e) => {
@@ -392,6 +662,9 @@
             });
         }
         
+        let teleportCooldown = 0;
+        let lastTeleportTime = 0;
+        
         function updatePlayer(deltaTime) {
             camera.rotation.order = 'YXZ';
             camera.rotation.y = -mouseX;
@@ -412,9 +685,60 @@
             if (keys.d) velocity.add(right);
             if (keys.a) velocity.sub(right);
             
-            if (velocity.length() > 0) {
+            if (velocity.length() > 0 && !playerLocked) {
                 velocity.normalize().multiplyScalar(speed * deltaTime);
                 camera.position.add(velocity);
+                
+                // Track cumulative movement time for paper airplane trigger
+                if (!paperAirplaneTriggered) {
+                    cumulativeMovementTime += deltaTime;
+                    
+                    if (cumulativeMovementTime >= 15) {
+                        paperAirplaneTriggered = true;
+                        createPaperAirplane(camera.position);
+                    }
+                }
+                
+                // Random teleport while moving
+                teleportCooldown -= deltaTime;
+                if (teleportCooldown <= 0 && Math.random() < 0.015) {
+                    // Teleport to random location
+                    const teleportDistance = 5 + Math.random() * 10;
+                    const teleportAngle = Math.random() * Math.PI * 2;
+                    
+                    const newX = camera.position.x + Math.cos(teleportAngle) * teleportDistance;
+                    const newZ = camera.position.z + Math.sin(teleportAngle) * teleportDistance;
+                    
+                    // Keep within bounds
+                    const limit = 19;
+                    camera.position.x = Math.max(-limit, Math.min(limit, newX));
+                    camera.position.z = Math.max(-limit, Math.min(limit, newZ));
+                    
+                    // Visual feedback
+                    document.body.style.filter = 'brightness(1.5) contrast(1.3)';
+                    setTimeout(() => {
+                        document.body.style.filter = 'brightness(1) contrast(1)';
+                    }, 100);
+                    
+                    // Chat reaction
+                    if (Date.now() - lastTeleportTime > 5000) {
+                        const teleportMessages = [
+                            "wait did they just jump",
+                            "that was weird",
+                            "did anyone else see that",
+                            "they glitched",
+                            "lag?",
+                            "wtf just happened"
+                        ];
+                        addChatMessage(
+                            usernames[Math.floor(Math.random() * usernames.length)],
+                            teleportMessages[Math.floor(Math.random() * teleportMessages.length)]
+                        );
+                        lastTeleportTime = Date.now();
+                    }
+                    
+                    teleportCooldown = 3 + Math.random() * 5;
+                }
             }
             
             // Floor tilt pushes player
@@ -483,6 +807,17 @@
                 
                 const isLooking = isPlayerLookingAt(obj);
                 
+                // Color change on look away/look back
+                if (isLooking && !obj.userData.wasLookingAt) {
+                    // Just started looking at it after looking away
+                    changeObjectColor(obj);
+                    checkGazeChatTrigger(obj);
+                }
+                obj.userData.wasLookingAt = isLooking;
+                
+                // Update wireframe glitch
+                updateGlitchEffect(obj, deltaTime);
+                
                 switch (obj.userData.type) {
                     case 'wakeup':
                         updateWakeUpPuzzle(obj, isLooking, deltaTime);
@@ -504,6 +839,40 @@
             
             // Floor tilts randomly
             updateFloorTilt(deltaTime);
+        }
+        
+        function changeObjectColor(obj) {
+            // Generate random vibrant color
+            const colors = [
+                0xff6b9d, 0x6bccff, 0xffeb3b, 0x4caf50, 0xff5722,
+                0x9c27b0, 0x00bcd4, 0xff9800, 0x8bc34a, 0xf44336,
+                0x3f51b5, 0xffeb3b, 0xe91e63, 0x00acc1, 0xff6f00,
+                0x7b1fa2, 0x00897b, 0xc62828, 0x558b2f, 0xd84315
+            ];
+            const newColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            obj.material.color.setHex(newColor);
+            obj.material.emissive.setHex(newColor);
+            obj.userData.baseColor = newColor;
+        }
+        
+        function updateGlitchEffect(obj, deltaTime) {
+            obj.userData.glitchTimer -= deltaTime;
+            
+            if (obj.userData.glitchTimer <= 0) {
+                // Start or stop glitch
+                if (obj.userData.isGlitching) {
+                    // Stop glitching
+                    obj.material.wireframe = false;
+                    obj.userData.isGlitching = false;
+                    obj.userData.glitchTimer = 3 + Math.random() * 5; // Wait 3-8 seconds
+                } else {
+                    // Start glitching
+                    obj.material.wireframe = true;
+                    obj.userData.isGlitching = true;
+                    obj.userData.glitchTimer = 0.1 + Math.random() * 0.3; // Glitch for 0.1-0.4 seconds
+                }
+            }
         }
         
         function updateWakeUpPuzzle(obj, isLooking, deltaTime) {
@@ -575,11 +944,22 @@
                 obj.userData.numberCycle++;
                 obj.userData.lastNumberChange = now;
                 
-                const numbers = ['7', '77', '777', '7777', '77777'];
-                const currentNum = numbers[obj.userData.numberCycle % numbers.length];
-                showInstruction(currentNum, 1400);
+                const messages = [
+                    '01010',
+                    'ś̴̢̛̫͉̠͈͈̹̞͚̻̓̂̃̈́̒̃͒̉͒̓̚̚t̸̥̘̲͙͙̫͙͚̑̋̀̒̂͌̎̈́̉̒͛̚̕i̷̥̼͎̯͖̅̀̓̊̐̓̓̂̚͝l̸̨͎̮̪͓̟͖̼̩͈͚̼̆́̏̌l̸̨͎̮̪͓̟͖̼̩͈͚̼̆́̏̌',
+                    '110011001',
+                    'w̸̨͍̝͈̟͖͇͍̦̜͇͆̍͊̒̌͐̈́͒̅͊̕a̸̺͕̟̯̟̣̠͒͒͂͌̎̿̅t̸̥̘̲͙͙̫͙͚̑̋̀̒̂͌̎̈́̉̒͛̚̕c̸̣̱̭̍̈́̽̓̐͝ḥ̶̱̭̍̈́̽̓̐͝i̷̥̼͎̯͖̅̀̓̊̐̓̓̂̚͝n̸̛̲͇̮̤̭͚̹̬̤̳̪̻̯̄ǵ̴̢̛̫͉̠͈͈̹̞͚̻̓̂̃̈́̒̃͒̉͒̓̚̚',
+                    '00101100',
+                    't̸̥̘̲͙͙̫͙͚̑̋̀̒̂͌̎̈́̉̒͛̚̕o̵̧̻̠͑͐̇̊̇͆̐̑̏̌́̒ǵ̴̢̛̫͉̠͈͈̹̞͚̻̓̂̃̈́̒̃͒̉͒̓̚̚ȇ̸̥̘̲͙͙̫͙͚̋̀̒̂͌̎̈́̉̒͛̚̕t̸̥̘̲͙͙̫͙͚̑̋̀̒̂͌̎̈́̉̒͛̚̕ḥ̶̱̭̍̈́̽̓̐͝ȇ̸̥̘̲͙͙̫͙͚̋̀̒̂͌̎̈́̉̒͛̚̕r̸̛̲͇̮̤̭͚̹̬̤̳̪̻̯̄',
+                    '111000111',
+                    'a̸̺͕̟̯̟̣̠͒͒͂͌̎̿̅l̸̨͎̮̪͓̟͖̼̩͈͚̼̆́̏̌w̸̨͍̝͈̟͖͇͍̦̜͇͆̍͊̒̌͐̈́͒̅͊̕a̸̺͕̟̯̟̣̠͒͒͂͌̎̿̅y̷̢̫̫̯̳̭̠̘̹̫͉̑́̐͒͠s̷̡̤͉͖̓̊̌͑̐̽̋̀',
+                    '10101010',
+                    'w̸̨͍̝͈̟͖͇͍̦̜͇͆̍͊̒̌͐̈́͒̅͊̕i̷̥̼͎̯͖̅̀̓̊̐̓̓̂̚͝t̸̥̘̲͙͙̫͙͚̑̋̀̒̂͌̎̈́̉̒͛̚̕ḥ̶̱̭̍̈́̽̓̐͝ ̷̳͓̩͆͊͒́́̒͠y̷̢̫̫̯̳̭̠̘̹̫͉̑́̐͒͠o̵̧̻̠͑͐̇̊̇͆̐̑̏̌́̒u̴̧̨̡͕̥̹̯͉̫̼̔͐̀̽̏͆̀͑̕'
+                ];
+                const currentMsg = messages[obj.userData.numberCycle % messages.length];
+                showInstruction(currentMsg, 1400);
                 
-                if (obj.userData.numberCycle >= 8) {
+                if (obj.userData.numberCycle >= 10) {
                     solvePuzzle(obj, "the numbers stopped");
                 }
             }
@@ -609,6 +989,260 @@
             // Apply tilt
             floor.rotation.z = Math.sin(floorTiltTime * 0.5) * currentTiltDirection.x;
             floor.rotation.x = -Math.PI / 2 + Math.sin(floorTiltTime * 0.4) * currentTiltDirection.z;
+        }
+        
+        // ============================================
+        // HEATMAP SYSTEM
+        // ============================================
+        
+        function recordPlayerPosition(deltaTime) {
+            heatmapTimer += deltaTime;
+            
+            if (heatmapTimer >= heatmapUpdateInterval) {
+                heatmapTimer = 0;
+                
+                // Convert player position to grid cell (2-unit cells)
+                const gridX = Math.floor(camera.position.x / 2);
+                const gridZ = Math.floor(camera.position.z / 2);
+                const key = `${gridX},${gridZ}`;
+                
+                // Increment visit count
+                if (!heatmapGrid[key]) {
+                    heatmapGrid[key] = 0;
+                }
+                heatmapGrid[key]++;
+                totalSteps++;
+                
+                // Update centroid
+                updateHeatmapCentroid();
+                
+                // Check for memory mark spawn
+                if (memoryMarks.length < 20 && Math.random() < 0.05) {
+                    spawnMemoryMarks();
+                }
+                
+                // Check for revisit chat trigger
+                checkRevisitChatTrigger(key);
+            }
+        }
+        
+        function updateHeatmapCentroid() {
+            let sumX = 0, sumZ = 0, count = 0;
+            
+            for (const key in heatmapGrid) {
+                const [x, z] = key.split(',').map(Number);
+                const visits = heatmapGrid[key];
+                sumX += x * visits;
+                sumZ += z * visits;
+                count += visits;
+            }
+            
+            if (count > 0) {
+                heatmapCentroid.set(sumX / count, sumZ / count);
+            }
+        }
+        
+        function updateHeatmapVisualization() {
+            // Remove existing heatmap visualization
+            if (heatmapMesh) {
+                scene.remove(heatmapMesh);
+                heatmapMesh.geometry.dispose();
+                heatmapMesh.material.dispose();
+                heatmapMesh = null;
+            }
+            
+            if (!showHeatmap) return;
+            
+            // Get all visited cells
+            const cells = Object.entries(heatmapGrid);
+            if (cells.length === 0) return;
+            
+            // Find max visits for normalization
+            const maxVisits = Math.max(...cells.map(([k, v]) => v));
+            
+            // Create instanced mesh for performance
+            const geometry = new THREE.PlaneGeometry(1.8, 1.8);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0xff6699,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide,
+                emissive: 0xff3366,
+                emissiveIntensity: 0.5,
+                depthWrite: false
+            });
+            
+            const instancedMesh = new THREE.InstancedMesh(geometry, material, cells.length);
+            const matrix = new THREE.Matrix4();
+            
+            cells.forEach(([key, visits], index) => {
+                const [x, z] = key.split(',').map(Number);
+                const worldX = x * 2 + 1;
+                const worldZ = z * 2 + 1;
+                
+                // Opacity based on visit frequency
+                const intensity = visits / maxVisits;
+                
+                matrix.makeRotationX(-Math.PI / 2);
+                matrix.setPosition(worldX, 0.02, worldZ);
+                instancedMesh.setMatrixAt(index, matrix);
+                instancedMesh.setColorAt(index, new THREE.Color().setHSL(0.9 - intensity * 0.2, 1, 0.5));
+            });
+            
+            instancedMesh.instanceMatrix.needsUpdate = true;
+            if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+            
+            scene.add(instancedMesh);
+            heatmapMesh = instancedMesh;
+        }
+        
+        // ============================================
+        // MEMORY MARKS
+        // ============================================
+        
+        function spawnMemoryMarks() {
+            // Get top 10 most visited cells
+            const sortedCells = Object.entries(heatmapGrid)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            sortedCells.forEach(([key, visits]) => {
+                // Skip if already has a mark nearby
+                const [gridX, gridZ] = key.split(',').map(Number);
+                const worldX = gridX * 2 + 1;
+                const worldZ = gridZ * 2 + 1;
+                
+                const hasNearbyMark = memoryMarks.some(mark => {
+                    const dist = Math.sqrt(
+                        Math.pow(mark.position.x - worldX, 2) +
+                        Math.pow(mark.position.z - worldZ, 2)
+                    );
+                    return dist < 3;
+                });
+                
+                if (hasNearbyMark || memoryMarks.length >= 20) return;
+                
+                // Create memory mark (soft circle)
+                const markGeo = new THREE.CircleGeometry(0.4, 16);
+                const markMat = new THREE.MeshBasicMaterial({
+                    color: 0x88ccff,
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    emissive: 0x6699ff,
+                    emissiveIntensity: 0.3,
+                    depthWrite: false
+                });
+                
+                const mark = new THREE.Mesh(markGeo, markMat);
+                mark.rotation.x = -Math.PI / 2;
+                mark.position.set(worldX, 0.015, worldZ);
+                
+                mark.userData = {
+                    type: 'memoryMark',
+                    fadeInProgress: 0,
+                    pulsePhase: Math.random() * Math.PI * 2,
+                    targetOpacity: 0.3 + (visits / 50) * 0.3
+                };
+                
+                scene.add(mark);
+                memoryMarks.push(mark);
+            });
+        }
+        
+        function updateMemoryMarks(deltaTime) {
+            memoryMarks.forEach(mark => {
+                // Fade in
+                if (mark.userData.fadeInProgress < 1) {
+                    mark.userData.fadeInProgress += deltaTime * 0.3;
+                    mark.material.opacity = mark.userData.targetOpacity * mark.userData.fadeInProgress;
+                }
+                
+                // Pulse
+                mark.userData.pulsePhase += deltaTime * 1.5;
+                const pulse = Math.sin(mark.userData.pulsePhase) * 0.1 + 0.9;
+                mark.material.emissiveIntensity = 0.3 * pulse;
+                mark.scale.setScalar(0.95 + Math.sin(mark.userData.pulsePhase * 0.8) * 0.05);
+            });
+        }
+        
+        // ============================================
+        // ENVIRONMENT REACTIONS TO HEATMAP
+        // ============================================
+        
+        function applyHeatmapEnvironmentEffects() {
+            if (totalSteps < 10) return;
+            
+            // Bias floor tilt toward heatmap centroid
+            const floor = scene.children.find(obj => obj.userData.type === 'floor');
+            if (floor) {
+                const tiltStrength = Math.min(totalSteps / 500, 0.3);
+                const tiltX = (heatmapCentroid.x / 10) * tiltStrength;
+                const tiltZ = (heatmapCentroid.y / 10) * tiltStrength;
+                
+                currentTiltDirection.x += (tiltX - currentTiltDirection.x) * 0.01;
+                currentTiltDirection.z += (tiltZ - currentTiltDirection.z) * 0.01;
+            }
+            
+            // Increase fog density based on total steps
+            const fogIncrease = Math.min(totalSteps / 1000, 0.02);
+            scene.fog.density = 0.08 + fogIncrease;
+        }
+        
+        // ============================================
+        // CHAT REACTIONS TO HEATMAP
+        // ============================================
+        
+        function checkRevisitChatTrigger(cellKey) {
+            const visits = heatmapGrid[cellKey];
+            
+            // Trigger chat on specific visit milestones
+            if (visits === 5) {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "they keep going back to the same spot"
+                );
+            } else if (visits === 10) {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "why do they keep returning there"
+                );
+            } else if (visits === 20) {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "obsessed with that corner"
+                );
+            }
+        }
+        
+        function checkGazeChatTrigger(gazedObject) {
+            if (!gazedObject || !gazedObject.userData.id) return;
+            
+            const objId = gazedObject.userData.id;
+            
+            if (!gazeRepeatCount[objId]) {
+                gazeRepeatCount[objId] = 0;
+            }
+            
+            gazeRepeatCount[objId]++;
+            
+            // Trigger chat on gaze milestones
+            if (gazeRepeatCount[objId] === 3) {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "they really like staring at that one"
+                );
+            } else if (gazeRepeatCount[objId] === 8) {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "ok that's excessive"
+                );
+            } else if (gazeRepeatCount[objId] === 15) {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "can they stop staring at it"
+                );
+            }
         }
         
         function isPlayerLookingAt(object) {
@@ -656,6 +1290,199 @@
         }
         
         // ============================================
+        // PAPER AIRPLANE EVENT
+        // ============================================
+        
+        function createPaperAirplane(playerPos) {
+            // Create paper airplane geometry
+            const geometry = new THREE.BufferGeometry();
+            const vertices = new Float32Array([
+                // Wings
+                -0.3, 0, -0.5,
+                0.3, 0, -0.5,
+                0, 0, 0.5,
+                
+                // Body fold
+                -0.05, 0.05, -0.3,
+                0.05, 0.05, -0.3,
+                0, 0.1, 0.3
+            ]);
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            geometry.setIndex([0, 1, 2, 3, 4, 5]);
+            geometry.computeVertexNormals();
+            
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0xf5f5dc,
+                side: THREE.DoubleSide,
+                emissive: 0xffffff,
+                emissiveIntensity: 0.1
+            });
+            
+            paperAirplane = new THREE.Mesh(geometry, material);
+            paperAirplane.position.set(
+                playerPos.x + (Math.random() - 0.5) * 3,
+                8,
+                playerPos.z + (Math.random() - 0.5) * 3
+            );
+            paperAirplane.rotation.y = Math.random() * Math.PI * 2;
+            
+            paperAirplane.userData = {
+                type: 'paperAirplane',
+                spawnTime: Date.now(),
+                wobblePhase: 0,
+                fallSpeed: 2,
+                landed: false
+            };
+            
+            scene.add(paperAirplane);
+            
+            // Add glow effect
+            const glowLight = new THREE.PointLight(0xffffcc, 1, 5);
+            glowLight.position.copy(paperAirplane.position);
+            paperAirplane.userData.glowLight = glowLight;
+            scene.add(glowLight);
+            
+            // Chat reaction
+            setTimeout(() => {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "what was that"
+                );
+            }, 500);
+            
+            setTimeout(() => {
+                addChatMessage(
+                    usernames[Math.floor(Math.random() * usernames.length)],
+                    "something fell"
+                );
+            }, 1500);
+        }
+        
+        function updatePaperAirplane(deltaTime) {
+            if (!paperAirplane || eventInProgress) return;
+            
+            if (!paperAirplane.userData.landed) {
+                // Falling animation with wobble
+                paperAirplane.userData.wobblePhase += deltaTime * 3;
+                
+                paperAirplane.position.y -= paperAirplane.userData.fallSpeed * deltaTime;
+                paperAirplane.position.x += Math.sin(paperAirplane.userData.wobblePhase) * 0.02;
+                paperAirplane.position.z += Math.cos(paperAirplane.userData.wobblePhase * 0.7) * 0.02;
+                
+                paperAirplane.rotation.x += deltaTime * 0.5;
+                paperAirplane.rotation.z = Math.sin(paperAirplane.userData.wobblePhase) * 0.3;
+                
+                // Update glow light
+                if (paperAirplane.userData.glowLight) {
+                    paperAirplane.userData.glowLight.position.copy(paperAirplane.position);
+                }
+                
+                // Check if landed
+                if (paperAirplane.position.y <= 0.5) {
+                    paperAirplane.position.y = 0.5;
+                    paperAirplane.userData.landed = true;
+                    paperAirplane.rotation.x = Math.PI / 2;
+                    paperAirplane.rotation.z = 0;
+                }
+            } else {
+                // Gentle pulse when landed
+                paperAirplane.position.y = 0.5 + Math.sin(Date.now() * 0.003) * 0.05;
+                
+                // Check player proximity
+                const dist = camera.position.distanceTo(paperAirplane.position);
+                if (dist < 2 && !playerLocked) {
+                    triggerPaperInteraction();
+                }
+            }
+        }
+        
+        function triggerPaperInteraction() {
+            if (eventInProgress) return;
+            eventInProgress = true;
+            playerLocked = true;
+            
+            // Lock player movement
+            Object.keys(keys).forEach(key => keys[key] = false);
+            
+            // Remove paper airplane from scene
+            if (paperAirplane) {
+                scene.remove(paperAirplane);
+                if (paperAirplane.userData.glowLight) {
+                    scene.remove(paperAirplane.userData.glowLight);
+                }
+            }
+            
+            // Show paper overlay
+            const overlay = document.getElementById('paperOverlay');
+            const content = document.getElementById('paperContent');
+            
+            overlay.classList.add('active');
+            
+            // Set message with individual character spans for bleed effect
+            const message = "you're in the wrong reality...when will you return to the correct one you belong in? hope to see you soon... - yours truly <3";
+            content.innerHTML = message.split('').map((char, i) => 
+                `<span class="paper-text" style="transition-delay: ${i * 0.02}s">${char === ' ' ? '&nbsp;' : char}</span>`
+            ).join('');
+            
+            // Reveal paper
+            setTimeout(() => {
+                content.classList.add('visible');
+            }, 500);
+            
+            // Start text bleed after readable moment (1.8 seconds)
+            setTimeout(() => {
+                const spans = content.querySelectorAll('.paper-text');
+                spans.forEach(span => {
+                    span.classList.add('bleed');
+                });
+            }, 2300);
+            
+            // Dissolve paper
+            setTimeout(() => {
+                content.style.transition = 'opacity 1s ease, filter 1s ease';
+                content.style.opacity = '0';
+                content.style.filter = 'blur(10px)';
+            }, 3800);
+            
+            // Floor collapse and fall
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                triggerFloorCollapse();
+            }, 4800);
+        }
+        
+        function triggerFloorCollapse() {
+            // Animate camera falling
+            const fallDuration = 2000;
+            const startY = camera.position.y;
+            const startTime = Date.now();
+            
+            // Fade to black
+            setTimeout(() => {
+                document.getElementById('fadeTransition').classList.add('active');
+            }, 500);
+            
+            const fallInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const progress = elapsed / fallDuration;
+                
+                if (progress >= 1) {
+                    clearInterval(fallInterval);
+                    // Redirect to next level
+                    setTimeout(() => {
+                        window.location.href = 'phase5-panel.html';
+                    }, 500);
+                } else {
+                    // Accelerating fall
+                    camera.position.y = startY - (progress * progress * 20);
+                    camera.rotation.x += 0.02;
+                    camera.rotation.z += 0.01;
+                }
+            }, 16);
+        }
+        
+        // ============================================
         // UI
         // ============================================
         
@@ -697,8 +1524,28 @@
             const deltaTime = clock.getDelta();
             const now = Date.now();
             
-            updatePlayer(deltaTime);
-            updatePuzzles(deltaTime);
+            if (!playerLocked) {
+                updatePlayer(deltaTime);
+                updatePuzzles(deltaTime);
+            }
+            updateRain(deltaTime);
+            updatePuddles();
+            updateLightning(deltaTime);
+            
+            // Update paper airplane event
+            if (paperAirplane) {
+                updatePaperAirplane(deltaTime);
+            }
+            
+            // Heatmap systems
+            recordPlayerPosition(deltaTime);
+            updateMemoryMarks(deltaTime);
+            applyHeatmapEnvironmentEffects();
+            
+            // Update heatmap visualization if visible
+            if (showHeatmap && now - lastViewerUpdate > 1000) {
+                updateHeatmapVisualization();
+            }
             
             // Random chat messages (every 3-7 seconds)
             if (now - lastChatTime > 3000 + Math.random() * 4000) {
