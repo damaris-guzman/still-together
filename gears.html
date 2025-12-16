@@ -95,7 +95,7 @@
             display: none;
         }
         
-        #fade-overlay {
+        #final-overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -108,39 +108,37 @@
             transition: opacity 2s ease-in-out;
         }
         
-        #fade-overlay.visible {
+        #final-overlay.visible {
             opacity: 1;
         }
         
-        #end-credits {
+        #final-text {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
-            z-index: 300;
+            z-index: 201;
             opacity: 0;
             transition: opacity 2s ease-in-out;
         }
         
-        #end-credits.visible {
+        #final-text.visible {
             opacity: 1;
         }
         
-        #end-credits h1 {
+        #final-text h1 {
             font-family: 'Georgia', 'Times New Roman', serif;
             font-size: 48px;
-            color: #fff;
+            color: rgba(255, 255, 255, 0.95);
             margin-bottom: 20px;
             font-weight: normal;
-            letter-spacing: 2px;
         }
         
-        #end-credits p {
+        #final-text p {
             font-family: 'Georgia', 'Times New Roman', serif;
-            font-size: 20px;
+            font-size: 18px;
             color: rgba(255, 255, 255, 0.7);
-            font-style: italic;
         }
     </style>
 </head>
@@ -152,9 +150,9 @@
         <div class="dot"></div>
     </div>
     <div id="story-container"></div>
-    <div id="fade-overlay"></div>
-    <div id="end-credits">
-        <h1>Still here</h1>
+    <div id="final-overlay"></div>
+    <div id="final-text">
+        <h1>Still Together</h1>
         <p>An experience by Damaris Guzman</p>
     </div>
     
@@ -816,7 +814,7 @@
             "Those experiences were first understood as delusion.",
             "",
             "I believed that if I followed signs closely enough,",
-            "I could reach what I thought was a truer reality I belonged to.",
+            "I could reach what I thought was the true reality I belonged to.",
             "",
             "In the game, this idea is mirrored.",
             "",
@@ -909,8 +907,10 @@
             
             function showNextLine() {
                 if (currentLine >= storyLines.length) {
-                    // Story complete - start end sequence
-                    setTimeout(startEndSequence, 2000);
+                    // Story complete - start final sequence
+                    setTimeout(() => {
+                        startFinalSequence();
+                    }, 2000);
                     return;
                 }
                 
@@ -962,30 +962,33 @@
             setTimeout(showNextLine, 3000);
         }
         
-        function startEndSequence() {
-            const fadeOverlay = document.getElementById('fade-overlay');
-            const endCredits = document.getElementById('end-credits');
+        function startFinalSequence() {
+            const overlay = document.getElementById('final-overlay');
+            const finalText = document.getElementById('final-text');
             const storyContainer = document.getElementById('story-container');
             
-            // Fade out story container
-            if (storyContainer.lastChild) {
-                storyContainer.lastChild.classList.add('fadeout');
-            }
+            // Fade out story container if any text remains
+            storyContainer.style.transition = 'opacity 2s';
+            storyContainer.style.opacity = '0';
             
-            // Fade to black
-            setTimeout(() => {
-                fadeOverlay.classList.add('visible');
-            }, 500);
+            // Fade to black overlay
+            overlay.classList.add('visible');
             
-            // Show "Still here" and credits
+            // After overlay is black, show final text
             setTimeout(() => {
-                endCredits.classList.add('visible');
-            }, 3000);
-            
-            // Final fade to complete black
-            setTimeout(() => {
-                endCredits.classList.remove('visible');
-            }, 8000);
+                finalText.classList.add('visible');
+                
+                // Hold for 5 seconds, then fade out final text
+                setTimeout(() => {
+                    finalText.style.transition = 'opacity 2s';
+                    finalText.style.opacity = '0';
+                    
+                    // Complete fade to black
+                    setTimeout(() => {
+                        // Experience ends in black
+                    }, 2000);
+                }, 5000);
+            }, 2000);
         }
         
         // Start story loader after scene initializes
