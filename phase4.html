@@ -151,11 +151,6 @@
         let isDragging = false;
         let sliderProgress = 0;
         
-        // Glitch effect
-        let isGrayscale = false;
-        let glitchTimer = 0;
-        let glitchInterval = 3 + Math.random() * 4; // Random interval 3-7 seconds
-        
         // ============================================
         // INIT THREE.JS
         // ============================================
@@ -447,13 +442,43 @@
             isDragging = false;
             
             const container = document.getElementById('slider-container');
-            container.style.transition = 'opacity 1s';
-            container.style.opacity = '0';
+            const title = document.getElementById('title');
             
-            // Redirect after animation
+            // Fade out slider and title
+            container.style.transition = 'opacity 0.5s';
+            container.style.opacity = '0';
+            title.style.transition = 'opacity 0.5s';
+            title.style.opacity = '0';
+            
+            // Fade scene to black
             setTimeout(() => {
-                window.location.href = 'phase1.html';
-            }, 1000);
+                scene.background.setHex(0x000000);
+                glitchShapes.forEach(shape => {
+                    if (shape.material) {
+                        shape.material.transparent = true;
+                        let opacity = shape.material.opacity;
+                        const fadeInterval = setInterval(() => {
+                            opacity -= 0.05;
+                            if (shape.material) {
+                                shape.material.opacity = Math.max(0, opacity);
+                            }
+                            if (opacity <= 0) {
+                                clearInterval(fadeInterval);
+                            }
+                        }, 30);
+                    }
+                });
+                
+                // Fade canvas to black
+                const canvas = document.getElementById('gameCanvas');
+                canvas.style.transition = 'opacity 1s';
+                canvas.style.opacity = '0';
+                
+                // Redirect to phase1.html
+                setTimeout(() => {
+                    window.location.href = 'phase1.html';
+                }, 1000);
+            }, 500);
         }
         
         // ============================================
@@ -483,37 +508,6 @@
             
             // Slow camera rotation
             camera.rotation.z = Math.sin(Date.now() * 0.0001) * 0.02;
-            
-            // Grayscale glitch effect
-            glitchTimer += deltaTime;
-            if (glitchTimer >= glitchInterval) {
-                isGrayscale = !isGrayscale;
-                glitchTimer = 0;
-                
-                if (isGrayscale) {
-                    // Switch to grayscale
-                    scene.background.setHex(0xcccccc);
-                    glitchShapes.forEach(shape => {
-                        if (shape.material) {
-                            if (!shape.userData.originalColor) {
-                                shape.userData.originalColor = shape.material.color.getHex();
-                            }
-                            const gray = Math.random() * 0.5 + 0.2;
-                            shape.material.color.setRGB(gray, gray, gray);
-                        }
-                    });
-                    glitchInterval = 0.3 + Math.random() * 0.5; // Stay grayscale 0.3-0.8 seconds
-                } else {
-                    // Switch back to color
-                    scene.background.setHex(0xf5f5f5);
-                    glitchShapes.forEach(shape => {
-                        if (shape.material && shape.userData.originalColor !== undefined) {
-                            shape.material.color.setHex(shape.userData.originalColor);
-                        }
-                    });
-                    glitchInterval = 3 + Math.random() * 4; // Wait 3-7 seconds before next glitch
-                }
-            }
         }
         
         // ============================================

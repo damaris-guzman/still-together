@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #e8f4f8;
+        }
+        
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #inventory {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border: 3px solid #00ffff;
+            color: #00ffff;
+            font-size: 24px;
+            font-family: monospace;
+            display: none;
+        }
+        #inventory.visible {
+            display: block;
+        }
+        #interaction-prompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border: 3px solid #ffff00;
+            color: #ffff00;
+            font-size: 28px;
+            font-family: monospace;
+            display: none;
+            text-align: center;
+        }
+        #interaction-prompt.visible {
+            display: block;
+        }
+        #unlock-prompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border: 3px solid #00ff00;
+            color: #00ff00;
+            font-size: 28px;
+            font-family: monospace;
+            display: none;
+            text-align: center;
+        }
+        #unlock-prompt.visible {
+            display: block;
+        }
+        #fade-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: black;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="inventory">KEY: 1</div>
+    <div id="interaction-prompt">PRESS E TO COLLECT KEY!</div>
+    <div id="unlock-prompt">PRESS T TO UNLOCK!</div>
+    <div id="fade-overlay"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script>
+        // ============================================
+        // WORLD - GLITCH ART LANDSCAPE
+        // ============================================
+        
+        let scene, camera, renderer, clock;
+        
+        // Movement
+        let moveSpeed = 10;
+        const keys = { w: false, a: false, s: false, d: false, q: false, e: false, t: false };
+        let mouseX = 0, mouseY = 0;
+        let isPointerLocked = false;
+        
+        // Player character
+        let player = null;
+        let cameraOffset = new THREE.Vector3(0, 8, 15);
+        let cameraRotation = { horizontal: 0, vertical: 0.3 };
+        let keyInHand = null;
+        
+        // Unlock animation
+        let isUnlocking = false;
+        let unlockAnimTime = 0;
+        let chestLid = null;
+        
+        // Floating objects
+        let floatingObjects = [];
+        let glitchSprites = [];
+        
+        // Conveyor belt items
+        let conveyorItems = [];
+        let conveyorSpeed = 2;
+        
+        // Key and treasure mechanics
+        let elapsedTime = 0;
+        let skyHole = null;
+        let fallingKey = null;
+        let treasureBox = null; // Created at scene start
+        let hasKey = false;
+        let keyDropped = false;
+        
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xe8f4f8);
+            scene.fog = new THREE.Fog(0xe8f4f8, 50, 300);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
+            camera.position.set(0, 5, 30);
+            
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            
+            clock = new THREE.Clock();
+            
+            setupLighting();
+            createWorld();
+            createFloatingObjects();
+            createGlitchSprites();
+            player = createPlayer();
+            treasureBox = createTreasureBox();
+            setupControls();
+            
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+        
+        // ============================================
+        // LIGHTING
+        // ============================================
+        
+        function setupLighting() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+            
+            const sunLight = new THREE.DirectionalLight(0xffffee, 0.6);
+            sunLight.position.set(100, 150, 50);
+            scene.add(sunLight);
+        }
+        
+        // ============================================
+        // WORLD CREATION
+        // ============================================
+        
+        function createWorld() {
+            // Create colorful abstract ground
+            createAbstractGround();
+            
+            // Create road
+            createRoad();
+            
+            // Create grass patches
+            createGrassPatches();
+            
+            // Create trees
+            createTrees();
+            
+            // Create abstract buildings/structures
+            createAbstractStructures();
+        }
+        
+        function createAbstractGround() {
+            // Create main ground with colorful pattern
+            const groundSize = 200;
+            const segments = 50;
+            const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, segments, segments);
+            
+            // Color vertices randomly
+            const colors = [];
+            const colorPalette = [
+                new THREE.Color(0xffff88),
+                new THREE.Color(0xff88ff),
+                new THREE.Color(0x88ffff),
+                new THREE.Color(0x88ff88),
+                new THREE.Color(0xffaa88),
+                new THREE.Color(0xaaaaff),
+                new THREE.Color(0xffffff),
+                new THREE.Color(0xffddaa)
+            ];
+            
+            for (let i = 0; i < groundGeo.attributes.position.count; i++) {
+                const color = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+                colors.push(color.r, color.g, color.b);
+            }
+            
+            groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            
+            const groundMat = new THREE.MeshBasicMaterial({ 
+                vertexColors: true,
+                side: THREE.DoubleSide
+            });
+            
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            scene.add(ground);
+        }
+        
+        function createRoad() {
+            // Main road (conveyor belt)
+            const roadGeo = new THREE.PlaneGeometry(8, 200);
+            const roadMat = new THREE.MeshBasicMaterial({ 
+                color: 0x3a3a3a,
+                side: THREE.DoubleSide
+            });
+            const road = new THREE.Mesh(roadGeo, roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.position.y = 0.05;
+            road.userData.type = 'conveyor';
+            scene.add(road);
+            
+            // Conveyor belt stripes (moving lines)
+            for (let z = -100; z < 100; z += 5) {
+                const lineGeo = new THREE.PlaneGeometry(7, 0.5);
+                const lineMat = new THREE.MeshBasicMaterial({ color: 0x4a4a4a });
+                const line = new THREE.Mesh(lineGeo, lineMat);
+                line.rotation.x = -Math.PI / 2;
+                line.position.set(0, 0.06, z);
+                line.userData.type = 'conveyorLine';
+                line.userData.initialZ = z;
+                scene.add(line);
+                conveyorItems.push(line);
+            }
+            
+            // Add items on conveyor
+            createConveyorItems();
+        }
+        
+        function createConveyorItems() {
+            const itemSpacing = 25;
+            const startZ = -80;
+            
+            // Red hand glove
+            const glove = createRedGlove();
+            glove.position.set(0, 0.8, startZ);
+            glove.userData.initialZ = startZ;
+            conveyorItems.push(glove);
+            
+            // Bucket
+            const bucket = createBucket();
+            bucket.position.set(0, 0.8, startZ + itemSpacing);
+            bucket.userData.initialZ = startZ + itemSpacing;
+            conveyorItems.push(bucket);
+            
+            // Black top hat
+            const hat = createTopHat();
+            hat.position.set(0, 0.8, startZ + itemSpacing * 2);
+            hat.userData.initialZ = startZ + itemSpacing * 2;
+            conveyorItems.push(hat);
+            
+            // Textbook
+            const textbook = createTextbook();
+            textbook.position.set(0, 0.8, startZ + itemSpacing * 3);
+            textbook.userData.initialZ = startZ + itemSpacing * 3;
+            conveyorItems.push(textbook);
+            
+            // Nokia phone
+            const phone = createNokiaPhone();
+            phone.position.set(0, 0.8, startZ + itemSpacing * 4);
+            phone.userData.initialZ = startZ + itemSpacing * 4;
+            conveyorItems.push(phone);
+            
+            // Toy oven
+            const oven = createToyOven();
+            oven.position.set(0, 0.8, startZ + itemSpacing * 5);
+            oven.userData.initialZ = startZ + itemSpacing * 5;
+            conveyorItems.push(oven);
+            
+            // Magical wand
+            const wand = createMagicalWand();
+            wand.position.set(0, 0.8, startZ + itemSpacing * 6);
+            wand.userData.initialZ = startZ + itemSpacing * 6;
+            conveyorItems.push(wand);
+        }
+        
+        function createRedGlove() {
+            const group = new THREE.Group();
+            
+            const palmGeo = new THREE.BoxGeometry(0.6, 0.3, 0.8);
+            const gloveMat = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+            const palm = new THREE.Mesh(palmGeo, gloveMat);
+            group.add(palm);
+            
+            // Fingers
+            for (let i = 0; i < 4; i++) {
+                const fingerGeo = new THREE.BoxGeometry(0.12, 0.3, 0.5);
+                const finger = new THREE.Mesh(fingerGeo, gloveMat);
+                finger.position.set(-0.2 + i * 0.13, 0, 0.5);
+                group.add(finger);
+            }
+            
+            group.userData.type = 'item';
+            scene.add(group);
+            return group;
+        }
+        
+        function createBucket() {
+            const group = new THREE.Group();
+            
+            const bucketGeo = new THREE.CylinderGeometry(0.4, 0.3, 0.8, 8);
+            const bucketMat = new THREE.MeshBasicMaterial({ color: 0x4444ff });
+            const bucket = new THREE.Mesh(bucketGeo, bucketMat);
+            group.add(bucket);
+            
+            // Handle
+            const handleGeo = new THREE.TorusGeometry(0.35, 0.05, 8, 16, Math.PI);
+            const handleMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const handle = new THREE.Mesh(handleGeo, handleMat);
+            handle.rotation.x = Math.PI / 2;
+            handle.position.y = 0.5;
+            group.add(handle);
+            
+            group.userData.type = 'item';
+            scene.add(group);
+            return group;
+        }
+        
+        function createTopHat() {
+            const group = new THREE.Group();
+            
+            // Brim
+            const brimGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.1, 16);
+            const hatMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+            const brim = new THREE.Mesh(brimGeo, hatMat);
+            brim.position.y = -0.3;
+            group.add(brim);
+            
+            // Crown
+            const crownGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.8, 16);
+            const crown = new THREE.Mesh(crownGeo, hatMat);
+            crown.position.y = 0.1;
+            group.add(crown);
+            
+            group.userData.type = 'item';
+            scene.add(group);
+            return group;
+        }
+        
+        function createTextbook() {
+            const group = new THREE.Group();
+            
+            const bookGeo = new THREE.BoxGeometry(0.7, 1, 0.15);
+            const bookMat = new THREE.MeshBasicMaterial({ color: 0x2266aa });
+            const book = new THREE.Mesh(bookGeo, bookMat);
+            book.rotation.y = Math.PI / 6;
+            group.add(book);
+            
+            // Pages
+            const pagesGeo = new THREE.BoxGeometry(0.65, 0.95, 0.12);
+            const pagesMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee });
+            const pages = new THREE.Mesh(pagesGeo, pagesMat);
+            pages.rotation.y = Math.PI / 6;
+            pages.position.x = 0.02;
+            group.add(pages);
+            
+            group.userData.type = 'item';
+            scene.add(group);
+            return group;
+        }
+        
+        function createNokiaPhone() {
+            const group = new THREE.Group();
+            
+            const phoneGeo = new THREE.BoxGeometry(0.3, 0.6, 0.1);
+            const phoneMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+            const phone = new THREE.Mesh(phoneGeo, phoneMat);
+            group.add(phone);
+            
+            // Screen
+            const screenGeo = new THREE.PlaneGeometry(0.25, 0.2);
+            const screenMat = new THREE.MeshBasicMaterial({ color: 0x66aa66 });
+            const screen = new THREE.Mesh(screenGeo, screenMat);
+            screen.position.set(0, 0.1, 0.051);
+            group.add(screen);
+            
+            // Buttons
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const buttonGeo = new THREE.BoxGeometry(0.06, 0.06, 0.02);
+                    const buttonMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                    const button = new THREE.Mesh(buttonGeo, buttonMat);
+                    button.position.set(-0.08 + j * 0.08, -0.1 - i * 0.08, 0.06);
+                    group.add(button);
+                }
+            }
+            
+            group.userData.type = 'item';
+            scene.add(group);
+            return group;
+        }
+        
+        function createToyOven() {
+            const group = new THREE.Group();
+            
+            const ovenGeo = new THREE.BoxGeometry(0.8, 0.6, 0.6);
+            const ovenMat = new THREE.MeshBasicMaterial({ color: 0xff66aa });
+            const oven = new THREE.Mesh(ovenGeo, ovenMat);
+            group.add(oven);
+            
+            // Window
+            const windowGeo = new THREE.PlaneGeometry(0.5, 0.3);
+            const windowMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+            const window = new THREE.Mesh(windowGeo, windowMat);
+            window.position.set(0, 0.1, 0.31);
+            group.add(window);
+            
+            // Knobs
+            for (let i = 0; i < 4; i++) {
+                const knobGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.05, 8);
+                const knobMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                const knob = new THREE.Mesh(knobGeo, knobMat);
+                knob.rotation.x = Math.PI / 2;
+                knob.position.set(-0.3 + i * 0.2, -0.2, 0.32);
+                group.add(knob);
+            }
+            
+            group.userData.type = 'item';
+            scene.add(group);
+            return group;
+        }
+        
+        function createMagicalWand() {
+            const group = new THREE.Group();
+            
+            // Handle
+            const handleGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.8, 8);
+            const handleMat = new THREE.MeshBasicMaterial({ color: 0x8b4513 });
+            const handle = new THREE.Mesh(handleGeo, handleMat);
+            handle.rotation.z = Math.PI / 6;
+            group.add(handle);
+            
+            // Star tip
+            const starGeo = new THREE.SphereGeometry(0.12, 8, 8);
+            const starMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffff00,
+                emissive: 0xffff00,
+                emissiveIntensity: 0.5
+            });
+            const star = new THREE.Mesh(starGeo, starMat);
+            star.position.set(0.35, 0.35, 0);
+            group.add(star);
+            
+            // Sparkles
+            for (let i = 0; i < 5; i++) {
+                const sparkleGeo = new THREE.SphereGeometry(0.04, 4, 4);
+                const sparkleMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const sparkle = new THREE.Mesh(sparkleGeo, sparkleMat);
+                sparkle.position.set(
+                    0.35 + (Math.random() - 0.5) * 0.3,
+                    0.35 + (Math.random() - 0.5) * 0.3,
+                    (Math.random() - 0.5) * 0.1
+                );
+                group.add(sparkle);
+            }
+            
+            group.userData.type = 'item';
+            scene.add(group);
+            return group;
+        }
+        
+        function createSkyHole() {
+            const group = new THREE.Group();
+            
+            // Dark square hole
+            const holeGeo = new THREE.PlaneGeometry(8, 8);
+            const holeMat = new THREE.MeshBasicMaterial({ 
+                color: 0x000000,
+                side: THREE.DoubleSide
+            });
+            const hole = new THREE.Mesh(holeGeo, holeMat);
+            hole.rotation.x = Math.PI / 2;
+            group.add(hole);
+            
+            // Glowing border
+            const borderThickness = 0.3;
+            const borderPositions = [
+                [0, 4 + borderThickness/2, 0, 8 + borderThickness, borderThickness, 0.1], // top
+                [0, -4 - borderThickness/2, 0, 8 + borderThickness, borderThickness, 0.1], // bottom
+                [4 + borderThickness/2, 0, 0, borderThickness, 8, 0.1], // right
+                [-4 - borderThickness/2, 0, 0, borderThickness, 8, 0.1] // left
+            ];
+            
+            const borderMat = new THREE.MeshBasicMaterial({ 
+                color: 0xff00ff,
+                emissive: 0xff00ff,
+                emissiveIntensity: 0.8
+            });
+            
+            borderPositions.forEach(([x, y, z, w, h, d]) => {
+                const borderGeo = new THREE.BoxGeometry(w, h, d);
+                const border = new THREE.Mesh(borderGeo, borderMat);
+                border.position.set(x, y, z);
+                border.rotation.x = Math.PI / 2;
+                group.add(border);
+            });
+            
+            // Position above the conveyor belt (road is at x=0)
+            group.position.set(0, 60, 10);
+            
+            scene.add(group);
+            return group;
+        }
+        
+        function createFallingKey() {
+            const group = new THREE.Group();
+            
+            // Key body
+            const bodyGeo = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8);
+            const keyMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffd700,
+                emissive: 0xffd700,
+                emissiveIntensity: 0.3
+            });
+            const body = new THREE.Mesh(bodyGeo, keyMat);
+            body.rotation.z = Math.PI / 2;
+            group.add(body);
+            
+            // Key head (ring)
+            const headGeo = new THREE.TorusGeometry(0.4, 0.1, 8, 16);
+            const head = new THREE.Mesh(headGeo, keyMat);
+            head.position.x = -0.9;
+            group.add(head);
+            
+            // Key teeth
+            for (let i = 0; i < 3; i++) {
+                const toothGeo = new THREE.BoxGeometry(0.2, 0.3, 0.1);
+                const tooth = new THREE.Mesh(toothGeo, keyMat);
+                tooth.position.set(0.6 + i * 0.2, -0.2, 0);
+                group.add(tooth);
+            }
+            
+            if (skyHole) {
+                group.position.copy(skyHole.position);
+            }
+            group.userData.falling = true;
+            group.userData.velocity = 0;
+            
+            scene.add(group);
+            return group;
+        }
+        
+        function createPlayer() {
+            const group = new THREE.Group();
+            
+            // Glowing humanoid aura - body
+            const bodyGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.5, 16);
+            const glowMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffffff,
+                emissive: 0xffffff,
+                emissiveIntensity: 1,
+                transparent: true,
+                opacity: 0.8
+            });
+            const body = new THREE.Mesh(bodyGeo, glowMat);
+            body.position.y = 1.5;
+            group.add(body);
+            
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const head = new THREE.Mesh(headGeo, glowMat);
+            head.position.y = 2.6;
+            group.add(head);
+            
+            // Arms
+            const armGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 8);
+            const leftArm = new THREE.Mesh(armGeo, glowMat);
+            leftArm.position.set(-0.5, 1.5, 0);
+            leftArm.rotation.z = 0.3;
+            group.add(leftArm);
+            
+            const rightArm = new THREE.Mesh(armGeo, glowMat);
+            rightArm.position.set(0.5, 1.5, 0);
+            rightArm.rotation.z = -0.3;
+            group.add(rightArm);
+            rightArm.userData.isRightArm = true;
+            
+            // Legs
+            const legGeo = new THREE.CylinderGeometry(0.15, 0.12, 1.2, 8);
+            const leftLeg = new THREE.Mesh(legGeo, glowMat);
+            leftLeg.position.set(-0.2, 0.6, 0);
+            group.add(leftLeg);
+            
+            const rightLeg = new THREE.Mesh(legGeo, glowMat);
+            rightLeg.position.set(0.2, 0.6, 0);
+            group.add(rightLeg);
+            
+            // Outer glow effect
+            const outerGlowGeo = new THREE.SphereGeometry(1.2, 16, 16);
+            const outerGlowMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.BackSide
+            });
+            const outerGlow = new THREE.Mesh(outerGlowGeo, outerGlowMat);
+            outerGlow.position.y = 1.8;
+            group.add(outerGlow);
+            
+            group.position.set(0, 0, 20);
+            scene.add(group);
+            return group;
+        }
+        
+        function createTreasureBox() {
+            const group = new THREE.Group();
+            
+            const scale = 3; // Large barrel-style chest
+            
+            // Wooden barrel chest body (using cylinder for curved shape)
+            const bodyGeo = new THREE.CylinderGeometry(0.8 * scale, 0.7 * scale, 1.2 * scale, 16);
+            const woodMat = new THREE.MeshBasicMaterial({ color: 0x6b4423 }); // dark wood
+            const body = new THREE.Mesh(bodyGeo, woodMat);
+            body.position.y = 0.6 * scale;
+            group.add(body);
+            
+            // Curved lid (cylinder cap)
+            const lidGeo = new THREE.CylinderGeometry(0.85 * scale, 0.75 * scale, 0.4 * scale, 16, 1, false, 0, Math.PI);
+            const lid = new THREE.Mesh(lidGeo, woodMat);
+            lid.position.y = 1.3 * scale;
+            lid.rotation.z = Math.PI;
+            lid.userData.isLid = true;
+            group.add(lid);
+            
+            // Metal bands (dark iron)
+            const bandMat = new THREE.MeshBasicMaterial({ color: 0x2a2a2a });
+            const bandPositions = [0.2, 0.6, 1.0];
+            
+            for (let i = 0; i < 3; i++) {
+                const bandGeo = new THREE.TorusGeometry(0.75 * scale, 0.08 * scale, 8, 16);
+                const band = new THREE.Mesh(bandGeo, bandMat);
+                band.rotation.x = Math.PI / 2;
+                band.position.y = bandPositions[i] * scale;
+                group.add(band);
+                
+                // Rivets on bands
+                for (let j = 0; j < 6; j++) {
+                    const rivetGeo = new THREE.SphereGeometry(0.05 * scale, 8, 8);
+                    const rivet = new THREE.Mesh(rivetGeo, bandMat);
+                    const angle = (j / 6) * Math.PI * 2;
+                    rivet.position.set(
+                        Math.cos(angle) * 0.75 * scale,
+                        bandPositions[i] * scale,
+                        Math.sin(angle) * 0.75 * scale
+                    );
+                    group.add(rivet);
+                }
+            }
+            
+            // Front metal plate
+            const plateGeo = new THREE.BoxGeometry(0.6 * scale, 0.8 * scale, 0.05 * scale);
+            const plate = new THREE.Mesh(plateGeo, bandMat);
+            plate.position.set(0, 0.6 * scale, 0.75 * scale);
+            group.add(plate);
+            
+            // Large padlock on front
+            const lockBodyGeo = new THREE.BoxGeometry(0.35 * scale, 0.5 * scale, 0.2 * scale);
+            const lockMat = new THREE.MeshBasicMaterial({ color: 0x8b7355 }); // bronze/brass
+            const lockBody = new THREE.Mesh(lockBodyGeo, lockMat);
+            lockBody.position.set(0, 0.6 * scale, 0.85 * scale);
+            group.add(lockBody);
+            
+            // Padlock shackle
+            const shackleGeo = new THREE.TorusGeometry(0.15 * scale, 0.06 * scale, 8, 16, Math.PI);
+            const shackle = new THREE.Mesh(shackleGeo, lockMat);
+            shackle.rotation.x = Math.PI;
+            shackle.position.set(0, 0.9 * scale, 0.85 * scale);
+            group.add(shackle);
+            
+            // Keyhole on padlock
+            const keyholeGeo = new THREE.BoxGeometry(0.04 * scale, 0.15 * scale, 0.05 * scale);
+            const keyholeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const keyhole = new THREE.Mesh(keyholeGeo, keyholeMat);
+            keyhole.position.set(0, 0.55 * scale, 0.96 * scale);
+            group.add(keyhole);
+            
+            // Metal corner reinforcements
+            const cornerMat = new THREE.MeshBasicMaterial({ color: 0x3a3a3a });
+            const cornerPositions = [
+                [-0.7, 0.2, 0.65], [0.7, 0.2, 0.65],
+                [-0.7, 1.0, 0.65], [0.7, 1.0, 0.65]
+            ];
+            cornerPositions.forEach(([x, y, z]) => {
+                const cornerGeo = new THREE.BoxGeometry(0.1 * scale, 0.15 * scale, 0.1 * scale);
+                const corner = new THREE.Mesh(cornerGeo, cornerMat);
+                corner.position.set(x * scale, y * scale, z * scale);
+                group.add(corner);
+            });
+            
+            // Glow around padlock (changes when player has key)
+            const glowGeo = new THREE.SphereGeometry(0.5 * scale, 16, 16);
+            const glowMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffaa00,
+                transparent: true,
+                opacity: 0.25
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.position.set(0, 0.7 * scale, 0.9 * scale);
+            group.add(glow);
+            glow.userData.isGlow = true;
+            glow.userData.normalColor = 0xffaa00;
+            glow.userData.activeColor = 0x00ff00;
+            
+            // Position in an obvious spot - near the road, visible from start
+            group.position.set(15, 0, 20);
+            
+            scene.add(group);
+            return group;
+        }
+        
+        function createGrassPatches() {
+            for (let i = 0; i < 30; i++) {
+                const size = Math.random() * 3 + 1;
+                const patchGeo = new THREE.CircleGeometry(size, 16);
+                const patchMat = new THREE.MeshBasicMaterial({ 
+                    color: Math.random() > 0.5 ? 0x44aa44 : 0x66cc66,
+                    side: THREE.DoubleSide
+                });
+                const patch = new THREE.Mesh(patchGeo, patchMat);
+                patch.rotation.x = -Math.PI / 2;
+                patch.position.set(
+                    (Math.random() - 0.5) * 150,
+                    0.03,
+                    (Math.random() - 0.5) * 150
+                );
+                scene.add(patch);
+            }
+        }
+        
+        function createTrees() {
+            const treePositions = [
+                [-20, 0, -30], [-15, 0, -25], [-18, 0, -20],
+                [20, 0, -30], [15, 0, -25], [18, 0, -20],
+                [-25, 0, 10], [-20, 0, 15], [-22, 0, 20],
+                [25, 0, 10], [20, 0, 15], [22, 0, 20]
+            ];
+            
+            treePositions.forEach(pos => {
+                const group = new THREE.Group();
+                
+                // Trunk
+                const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 3, 8);
+                const trunkMat = new THREE.MeshBasicMaterial({ color: 0x5a4a3a });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 1.5;
+                group.add(trunk);
+                
+                // Foliage (sphere)
+                const foliageGeo = new THREE.SphereGeometry(2, 8, 8);
+                const foliageMat = new THREE.MeshBasicMaterial({ 
+                    color: Math.random() > 0.5 ? 0x33aa33 : 0x55cc55
+                });
+                const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+                foliage.position.y = 4;
+                group.add(foliage);
+                
+                group.position.set(pos[0], pos[1], pos[2]);
+                scene.add(group);
+            });
+        }
+        
+        function createAbstractStructures() {
+            // Create random colorful geometric shapes as "buildings"
+            const shapes = [
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.ConeGeometry(0.5, 1, 4),
+                new THREE.TetrahedronGeometry(0.5),
+                new THREE.OctahedronGeometry(0.5),
+                new THREE.TorusGeometry(0.3, 0.1, 8, 16)
+            ];
+            
+            for (let i = 0; i < 20; i++) {
+                const geometry = shapes[Math.floor(Math.random() * shapes.length)];
+                const material = new THREE.MeshBasicMaterial({ 
+                    color: Math.random() * 0xffffff,
+                    wireframe: Math.random() > 0.7
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(
+                    (Math.random() - 0.5) * 100,
+                    Math.random() * 3 + 1,
+                    (Math.random() - 0.5) * 100
+                );
+                mesh.rotation.set(
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI,
+                    Math.random() * Math.PI
+                );
+                mesh.scale.setScalar(Math.random() * 3 + 0.5);
+                scene.add(mesh);
+            }
+        }
+        
+        // ============================================
+        // FLOATING OBJECTS
+        // ============================================
+        
+        function createFloatingObjects() {
+            const symbols = ['+', '×', '○', '□', '△', '◇', '⊕', '⊗'];
+            const colors = [0xff0080, 0x00ffff, 0xffff00, 0x00ff00, 0xff6600, 0x8800ff];
+            
+            for (let i = 0; i < 100; i++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 64;
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                
+                // Random symbol
+                const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+                ctx.font = 'bold 40px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(symbol, 32, 32);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ 
+                    map: texture,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const sprite = new THREE.Sprite(material);
+                sprite.position.set(
+                    (Math.random() - 0.5) * 150,
+                    Math.random() * 30 + 5,
+                    (Math.random() - 0.5) * 150
+                );
+                sprite.scale.setScalar(Math.random() * 3 + 1);
+                
+                sprite.userData = {
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.2,
+                        (Math.random() - 0.5) * 0.2,
+                        (Math.random() - 0.5) * 0.2
+                    ),
+                    rotationSpeed: (Math.random() - 0.5) * 0.02
+                };
+                
+                scene.add(sprite);
+                floatingObjects.push(sprite);
+            }
+        }
+        
+        function createGlitchSprites() {
+            // Text sprites with glitchy appearance
+            const texts = [
+                'B.ROOT-', '01001', 'glitch', 'ERROR', 'NULL',
+                '>>>>', '----', '####', '0x00', 'NaN'
+            ];
+            const colors = [0xff0080, 0x00ffff, 0xffff00, 0xff6600];
+            
+            for (let i = 0; i < 30; i++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                
+                const text = texts[Math.floor(Math.random() * texts.length)];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+                ctx.font = 'bold 24px monospace';
+                ctx.fillText(text, 10, 40);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ 
+                    map: texture,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                
+                const sprite = new THREE.Sprite(material);
+                sprite.position.set(
+                    (Math.random() - 0.5) * 120,
+                    Math.random() * 25 + 3,
+                    (Math.random() - 0.5) * 120
+                );
+                sprite.scale.set(4, 1, 1);
+                
+                sprite.userData = {
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.3,
+                        0,
+                        (Math.random() - 0.5) * 0.3
+                    ),
+                    glitchTimer: Math.random() * 5
+                };
+                
+                scene.add(sprite);
+                glitchSprites.push(sprite);
+            }
+        }
+        
+        // ============================================
+        // CONTROLS
+        // ============================================
+        
+        function setupControls() {
+            document.addEventListener('click', () => {
+                if (!isPointerLocked) {
+                    document.body.requestPointerLock();
+                }
+            });
+            
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = document.pointerLockElement === document.body;
+            });
+            
+            document.addEventListener('keydown', (e) => {
+                const key = e.key.toLowerCase();
+                if (keys.hasOwnProperty(key)) {
+                    keys[key] = true;
+                }
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                const key = e.key.toLowerCase();
+                if (keys.hasOwnProperty(key)) {
+                    keys[key] = false;
+                }
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (isPointerLocked && !isUnlocking) {
+                    mouseX = e.movementX;
+                    mouseY = e.movementY;
+                }
+            });
+        }
+        
+        // ============================================
+        // UPDATE
+        // ============================================
+        
+        function updateCamera(deltaTime) {
+            if (!player || isUnlocking) return;
+            
+            // Move player
+            const moveVector = new THREE.Vector3();
+            const speed = moveSpeed * deltaTime;
+            
+            if (keys.w) moveVector.z -= 1;
+            if (keys.s) moveVector.z += 1;
+            if (keys.a) moveVector.x -= 1;
+            if (keys.d) moveVector.x += 1;
+            
+            // Apply camera rotation to movement
+            if (moveVector.length() > 0) {
+                moveVector.normalize();
+                moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.horizontal);
+                player.position.add(moveVector.multiplyScalar(speed));
+                
+                // Rotate player to face movement direction
+                const angle = Math.atan2(moveVector.x, moveVector.z);
+                player.rotation.y = angle;
+            }
+            
+            // Update camera rotation from mouse
+            if (isPointerLocked) {
+                cameraRotation.horizontal -= mouseX * 0.003;
+                cameraRotation.vertical -= mouseY * 0.003;
+                cameraRotation.vertical = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraRotation.vertical));
+                
+                mouseX = 0;
+                mouseY = 0;
+            }
+            
+            // Position camera behind and above player
+            const offset = new THREE.Vector3(
+                Math.sin(cameraRotation.horizontal) * cameraOffset.z,
+                cameraOffset.y + Math.sin(cameraRotation.vertical) * 5,
+                Math.cos(cameraRotation.horizontal) * cameraOffset.z
+            );
+            
+            camera.position.copy(player.position).add(offset);
+            camera.lookAt(player.position.x, player.position.y + 2, player.position.z);
+        }
+        
+        function updateConveyorBelt(deltaTime) {
+            conveyorItems.forEach(item => {
+                // Move forward on the conveyor
+                item.position.z += conveyorSpeed * deltaTime;
+                
+                // Loop back when reaching the end
+                if (item.position.z > 100) {
+                    item.position.z = item.userData.initialZ - 200;
+                }
+                
+                // Gentle rotation for items (not conveyor lines)
+                if (item.userData.type === 'item') {
+                    item.rotation.y += deltaTime * 0.5;
+                }
+            });
+        }
+        
+        function updateKeyMechanics(deltaTime) {
+            // Check if 5 seconds have passed
+            if (!keyDropped && elapsedTime >= 5) {
+                skyHole = createSkyHole();
+                fallingKey = createFallingKey();
+                keyDropped = true;
+            }
+            
+            // Update falling key
+            if (fallingKey && fallingKey.userData.falling) {
+                fallingKey.userData.velocity += 9.8 * deltaTime; // gravity
+                fallingKey.position.y -= fallingKey.userData.velocity * deltaTime;
+                fallingKey.rotation.x += deltaTime * 2;
+                fallingKey.rotation.y += deltaTime * 3;
+                
+                // Check if key hit the ground
+                if (fallingKey.position.y <= 0.5) {
+                    fallingKey.position.y = 0.5;
+                    fallingKey.userData.falling = false;
+                    fallingKey.rotation.x = 0;
+                    fallingKey.rotation.y = 0;
+                }
+            }
+            
+            // Check if player is near the key
+            if (fallingKey && !fallingKey.userData.falling && !hasKey && player) {
+                const dist = player.position.distanceTo(fallingKey.position);
+                if (dist < 3) {
+                    // Show prompt to collect
+                    document.getElementById('interaction-prompt').classList.add('visible');
+                    
+                    // Check if E key is pressed
+                    if (keys.e) {
+                        hasKey = true;
+                        scene.remove(fallingKey);
+                        
+                        // Hide prompt
+                        document.getElementById('interaction-prompt').classList.remove('visible');
+                        
+                        // Show key in inventory
+                        document.getElementById('inventory').classList.add('visible');
+                        
+                        // Create key in player's hand
+                        createKeyInHand();
+                    }
+                } else {
+                    document.getElementById('interaction-prompt').classList.remove('visible');
+                }
+            }
+            
+            // Check if player is near treasure chest with key
+            if (treasureBox && hasKey && !isUnlocking && player) {
+                const dist = player.position.distanceTo(treasureBox.position);
+                if (dist < 5) {
+                    // Show unlock prompt
+                    document.getElementById('unlock-prompt').classList.add('visible');
+                    
+                    // Check if T key is pressed
+                    if (keys.t) {
+                        isUnlocking = true;
+                        unlockAnimTime = 0;
+                        document.getElementById('unlock-prompt').classList.remove('visible');
+                        document.getElementById('inventory').classList.remove('visible');
+                        
+                        // Remove key from hand
+                        if (keyInHand) {
+                            player.remove(keyInHand);
+                            keyInHand = null;
+                        }
+                        
+                        // Store lid reference
+                        chestLid = treasureBox.children.find(child => child.userData.isLid);
+                    }
+                } else {
+                    document.getElementById('unlock-prompt').classList.remove('visible');
+                }
+            }
+        }
+        
+        function updateUnlockAnimation(deltaTime) {
+            if (!isUnlocking) return;
+            
+            unlockAnimTime += deltaTime;
+            
+            // Phase 1: Open chest lid (0-1.5s)
+            if (unlockAnimTime < 1.5 && chestLid) {
+                const openProgress = Math.min(unlockAnimTime / 1.5, 1);
+                chestLid.rotation.x = -openProgress * Math.PI / 2.5;
+                chestLid.position.z += deltaTime * 0.8;
+            }
+            
+            // Phase 2: Move player toward and above chest (1.5-3s)
+            if (unlockAnimTime >= 1.5 && unlockAnimTime < 3) {
+                const moveProgress = (unlockAnimTime - 1.5) / 1.5;
+                const targetPos = treasureBox.position.clone();
+                targetPos.y = 8;
+                
+                player.position.lerp(targetPos, deltaTime * 2);
+                player.rotation.y += deltaTime * 3;
+                
+                // Make player transparent
+                player.children.forEach(child => {
+                    if (child.material) {
+                        child.material.opacity = 1 - moveProgress * 0.5;
+                    }
+                });
+            }
+            
+            // Phase 3: Fall into chest (3-4s)
+            if (unlockAnimTime >= 3 && unlockAnimTime < 4) {
+                const fallProgress = (unlockAnimTime - 3) / 1;
+                const targetPos = treasureBox.position.clone();
+                targetPos.y = treasureBox.position.y + 2;
+                
+                player.position.lerp(targetPos, deltaTime * 5);
+                player.rotation.x += deltaTime * 8;
+                player.scale.setScalar(1 - fallProgress * 0.7);
+                
+                // Fade player out
+                player.children.forEach(child => {
+                    if (child.material) {
+                        child.material.opacity = 0.5 - fallProgress * 0.5;
+                    }
+                });
+                
+                // Switch to first person view
+                const firstPersonOffset = new THREE.Vector3(0, 2, 0);
+                camera.position.copy(player.position).add(firstPersonOffset);
+                camera.lookAt(treasureBox.position);
+            }
+            
+            // Phase 4: Fade to black and redirect (4-5s)
+            if (unlockAnimTime >= 4 && unlockAnimTime < 5) {
+                const fadeProgress = (unlockAnimTime - 4) / 1;
+                // Fade to black using overlay
+                document.getElementById('fade-overlay').style.opacity = fadeProgress;
+            }
+            
+            // Redirect to gears.html
+            if (unlockAnimTime >= 5) {
+                window.location.href = 'gears.html';
+            }
+        }
+        
+        function createKeyInHand() {
+            if (keyInHand || !player) return;
+            
+            const group = new THREE.Group();
+            
+            // Smaller key for hand
+            const bodyGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8);
+            const keyMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffd700,
+                emissive: 0xffd700,
+                emissiveIntensity: 0.5
+            });
+            const body = new THREE.Mesh(bodyGeo, keyMat);
+            body.rotation.z = Math.PI / 2;
+            group.add(body);
+            
+            // Key head (ring)
+            const headGeo = new THREE.TorusGeometry(0.15, 0.05, 8, 16);
+            const head = new THREE.Mesh(headGeo, keyMat);
+            head.position.x = -0.35;
+            group.add(head);
+            
+            // Key teeth
+            for (let i = 0; i < 3; i++) {
+                const toothGeo = new THREE.BoxGeometry(0.08, 0.12, 0.04);
+                const tooth = new THREE.Mesh(toothGeo, keyMat);
+                tooth.position.set(0.25 + i * 0.08, -0.08, 0);
+                group.add(tooth);
+            }
+            
+            // Position in right hand
+            const rightArm = player.children.find(child => child.userData.isRightArm);
+            if (rightArm) {
+                group.position.set(0.5, 0.8, 0.3);
+                group.rotation.set(0, Math.PI / 4, -Math.PI / 6);
+                player.add(group);
+                keyInHand = group;
+            }
+        }
+        
+        function updateFloatingObjects(deltaTime) {
+            floatingObjects.forEach(obj => {
+                obj.position.add(obj.userData.velocity);
+                obj.material.rotation += obj.userData.rotationSpeed;
+                
+                // Bounce off boundaries
+                if (Math.abs(obj.position.x) > 80) obj.userData.velocity.x *= -1;
+                if (obj.position.y < 5 || obj.position.y > 40) obj.userData.velocity.y *= -1;
+                if (Math.abs(obj.position.z) > 80) obj.userData.velocity.z *= -1;
+            });
+            
+            glitchSprites.forEach(sprite => {
+                sprite.position.add(sprite.userData.velocity);
+                sprite.userData.glitchTimer -= deltaTime;
+                
+                if (sprite.userData.glitchTimer <= 0) {
+                    sprite.userData.glitchTimer = Math.random() * 3 + 1;
+                    sprite.position.x += (Math.random() - 0.5) * 5;
+                    sprite.position.z += (Math.random() - 0.5) * 5;
+                }
+                
+                // Wrap around
+                if (Math.abs(sprite.position.x) > 70) sprite.position.x *= -0.9;
+                if (Math.abs(sprite.position.z) > 70) sprite.position.z *= -0.9;
+            });
+        }
+        
+        // ============================================
+        // ANIMATE
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = clock.getDelta();
+            elapsedTime += deltaTime;
+            
+            if (!isUnlocking) {
+                updateCamera(deltaTime);
+            }
+            updateConveyorBelt(deltaTime);
+            updateFloatingObjects(deltaTime);
+            updateKeyMechanics(deltaTime);
+            updateUnlockAnimation(deltaTime);
+            
+            // Pulse the treasure chest glow
+            if (treasureBox) {
+                const glow = treasureBox.children.find(child => child.userData.isGlow);
+                if (glow) {
+                    if (hasKey) {
+                        // Vibrant green glow when player has key
+                        glow.material.color.setHex(glow.userData.activeColor);
+                        glow.material.opacity = 0.4 + Math.sin(elapsedTime * 4) * 0.3;
+                    } else {
+                        // Subtle orange glow normally
+                        glow.material.color.setHex(glow.userData.normalColor);
+                        glow.material.opacity = 0.15 + Math.sin(elapsedTime * 2) * 0.1;
+                    }
+                }
+            }
+            
+            // Pulse player glow
+            if (player) {
+                const outerGlow = player.children.find(child => child.material && child.material.side === THREE.BackSide);
+                if (outerGlow) {
+                    outerGlow.material.opacity = 0.1 + Math.sin(elapsedTime * 3) * 0.05;
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // ============================================
+        // INIT
+        // ============================================
+        
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
