@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Node Network</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000; overflow:hidden; cursor:crosshair; }
+  canvas { display:block; }
+  #ui {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    pointer-events:none; z-index:10; font-family:'Courier New',monospace;
+  }
+  #hint {
+    position:absolute; bottom:28px; left:50%; transform:translateX(-50%);
+    color:#ffffff; font-size:12px; letter-spacing:0.3em; text-transform:uppercase;
+    transition:opacity 2s;
+    text-shadow: 0 0 10px #bb55ee, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    -webkit-text-stroke: 0.5px #110022;
+  }
+  #counter {
+    position:absolute; top:22px; right:22px;
+    color:#ffffff; font-size:11px; letter-spacing:0.25em; text-transform:uppercase;
+    text-shadow: 0 0 10px #bb55ee, 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    -webkit-text-stroke: 0.5px #110022;
+  }
+  #unlock-msg {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    color:#ffffff; font-size:20px; letter-spacing:0.6em; text-transform:uppercase;
+    opacity:0; transition:opacity 0.15s;
+    text-shadow:0 0 18px #ffffff, 0 0 50px #ffaaee, 0 0 100px #cc44ff,
+                1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    -webkit-text-stroke: 0.8px #220033;
+    white-space:nowrap;
+  }
+  #algo-msg {
+    position:absolute; bottom:80px; left:50%; transform:translateX(-50%);
+    color:#ffffff; font-size:15px; letter-spacing:0.18em; line-height:2.1;
+    text-align:center; opacity:0; max-width:620px;
+    font-family:'Courier New',monospace;
+    text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000,
+                 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
+    -webkit-text-stroke: 1px #000;
+    transition:opacity 0s;
+    pointer-events:none;
+  }
+  #code-prompt {
+    position:absolute; bottom:88px; left:50%; transform:translateX(-50%);
+    text-align:center; opacity:0; pointer-events:none;
+    font-family:'Courier New',monospace;
+    transition:opacity 1.5s;
+  }
+  #code-prompt .prompt-label {
+    color:#ffffff; font-size:13px; letter-spacing:0.38em; text-transform:uppercase;
+    margin-bottom:18px;
+    text-shadow: 0 0 12px #ffaaee, 0 0 28px #cc44ff,
+                 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+    -webkit-text-stroke: 0.8px #000;
+  }
+  #code-prompt .digits {
+    font-size:40px; letter-spacing:0.6em; display:flex; gap:2px; justify-content:center;
+  }
+  .digit { color:#ffffff; transition:color 0.18s, text-shadow 0.18s;
+    text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; }
+  .digit.lit  { color:#00ffff;
+    text-shadow:0 0 14px #00ffff, 0 0 32px #0088cc,
+                2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; }
+  .digit.full { color:#ffffff;
+    text-shadow:0 0 20px #ffffff, 0 0 50px #ffaaff, 0 0 90px #dd00ff,
+                2px 2px 0 #000, -2px -2px 0 #000;
+                animation:digitPop 0.35s ease-out; }
+  @keyframes digitPop { 0%{transform:scale(1.6)} 100%{transform:scale(1)} }
+  #connecting-msg {
+    position:absolute; top:42%; left:50%; transform:translate(-50%,-50%);
+    color:#ffffff; font-size:17px; letter-spacing:0.6em;
+    font-family:'Courier New',monospace; text-transform:lowercase;
+    opacity:0; pointer-events:none;
+    text-shadow:0 0 20px #ee88ff, 0 0 50px #aa44ff, 0 0 100px #6600cc,
+                2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+    -webkit-text-stroke: 0.5px #110022;
+    white-space:nowrap;
+  }
+  @keyframes connectBreath {
+    0%   { opacity:1;    text-shadow:0 0 20px #ee88ff, 0 0 50px #aa44ff, 0 0 100px #6600cc, 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; }
+    33%  { opacity:0.8;  text-shadow:0 0 25px #88ffee, 0 0 60px #44ccff, 0 0 120px #0088aa, 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; }
+    66%  { opacity:0.9;  text-shadow:0 0 22px #ffaadd, 0 0 55px #ff44aa, 0 0 110px #cc0077, 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; }
+    100% { opacity:1;    text-shadow:0 0 20px #ee88ff, 0 0 50px #aa44ff, 0 0 100px #6600cc, 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; }
+  }
+  #connecting-msg.on { animation:connectBreath 3s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="hint">CLICK THE NODES &nbsp;&nbsp; WASD TO NAVIGATE</div>
+  <div id="counter">NODES: 0 / 3</div>
+  <div id="unlock-msg">SYSTEM UNLOCKED</div>
+  <div id="algo-msg">It never takes long.<br>One connection and the extended remix<br>of the algorithm is unlocked.</div>
+  <div id="code-prompt">
+    <div class="prompt-label">trace&nbsp;the&nbsp;sequence</div>
+    <div class="digits">
+      <span class="digit" id="d0">0</span>
+      <span class="digit" id="d1">1</span>
+      <span class="digit" id="d2">1</span>
+      <span class="digit" id="d3">0</span>
+      <span class="digit" id="d4">1</span>
+      <span class="digit" id="d5">0</span>
+      <span class="digit" id="d6">1</span>
+    </div>
+  </div>
+  <div id="connecting-msg"><span id="connect-text">connecting</span><span id="connect-dots"></span></div>
+</div>
+<script type="module">
+import * as THREE from 'https://esm.sh/three@0.128.0';
+
+// ─── RENDERER ───────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ReinhardToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+// ─── SCENE ───────────────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x03000a);
+scene.fog = new THREE.FogExp2(0x03000a, 0.013);
+scene.add(new THREE.AmbientLight(0x331144, 1.2));
+const centerLight = new THREE.PointLight(0xcc44ff, 1.1, 55);
+scene.add(centerLight);
+
+// ─── CAMERA ──────────────────────────────────────────────────────────────────
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(0, 3, 30);
+
+// ─── POST PROCESSING (progressive enhancement) ───────────────────────────────
+let composer = null, bloomPass = null, chromaPass = null;
+
+try {
+  const [
+    { EffectComposer },
+    { RenderPass },
+    { UnrealBloomPass },
+    { ShaderPass }
+  ] = await Promise.all([
+    import('https://esm.sh/three@0.128.0/examples/jsm/postprocessing/EffectComposer.js'),
+    import('https://esm.sh/three@0.128.0/examples/jsm/postprocessing/RenderPass.js'),
+    import('https://esm.sh/three@0.128.0/examples/jsm/postprocessing/UnrealBloomPass.js'),
+    import('https://esm.sh/three@0.128.0/examples/jsm/postprocessing/ShaderPass.js'),
+  ]);
+
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+
+  bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(innerWidth, innerHeight),
+    1.9, 0.75, 0.04
+  );
+  composer.addPass(bloomPass);
+
+  chromaPass = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, amount: { value: 0.004 } },
+    vertexShader: `
+      varying vec2 vUv;
+      void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+    `,
+    fragmentShader: `
+      uniform sampler2D tDiffuse;
+      uniform float amount;
+      varying vec2 vUv;
+      void main(){
+        vec2 d = (vUv - 0.5) * length(vUv - 0.5) * 2.0;
+        float r = texture2D(tDiffuse, vUv + d * amount).r;
+        float g = texture2D(tDiffuse, vUv).g;
+        float b = texture2D(tDiffuse, vUv - d * amount).b;
+        gl_FragColor = vec4(r, g, b, 1.0);
+      }
+    `
+  });
+  composer.addPass(chromaPass);
+} catch(e) {
+  console.warn('Post-processing unavailable, running without bloom:', e.message);
+}
+
+// ─── GLOW TEXTURE ────────────────────────────────────────────────────────────
+const glowTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0,   'rgba(255,255,255,1)');
+  g.addColorStop(0.35,'rgba(255,255,255,0.4)');
+  g.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+
+// ─── COLORS ──────────────────────────────────────────────────────────────────
+const INIT_COLORS = [0xcc44ff, 0xff44bb, 0x44ccff, 0xaa33ff, 0xff6699];
+const NEON_COLORS = [0xff44ff, 0x44ffee, 0xaaff44, 0xff8844, 0xff0099, 0xcc88ff, 0x88ffdd];
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+const nodes   = [];
+const pulses  = [];
+let activatedCount = 0;
+let unlocked       = false;
+let hoveredNode    = null;
+const clock = new THREE.Clock();
+const lineGroup = new THREE.Group();
+scene.add(lineGroup);
+
+let codeIdx      = 0;
+let fallingState = { active: false, startTime: 0, fallR: 30, spinSpeed: 0 };
+
+// ─── ORBITAL RINGS ──────────────────────────────────────────────────────────
+const rings = [];
+function buildRings() {
+  const specs = [
+    { radius: 14,   tube: 0.09,  tilt: 0.28,  color: 0xff44dd,  speed: 0.18 },
+    { radius: 19.5, tube: 0.06,  tilt: -0.55, color: 0x44ffee,  speed: -0.11 },
+    { radius: 25,   tube: 0.05,  tilt: 1.05,  color: 0xccff44,  speed: 0.075 },
+    { radius: 31,   tube: 0.04,  tilt: -0.18, color: 0xee88ff,  speed: -0.055 },
+  ];
+  specs.forEach((s, idx) => {
+    const geo = new THREE.TorusGeometry(s.radius, s.tube, 6, 160);
+    const mat = new THREE.MeshBasicMaterial({
+      color: s.color, transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = s.tilt;
+    mesh.rotation.z = idx * 0.4;
+    scene.add(mesh);
+
+    // small spark dots on the ring
+    const sparks = [];
+    const sparkCount = 3 + idx;
+    for (let k = 0; k < sparkCount; k++) {
+      const sm = new THREE.SpriteMaterial({
+        map: glowTex, color: s.color,
+        blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false,
+      });
+      const sp = new THREE.Sprite(sm);
+      sp.scale.set(1.8, 1.8, 1);
+      scene.add(sp);
+      sparks.push({ sprite: sp, mat: sm, angle: (k / sparkCount) * Math.PI * 2 });
+    }
+
+    rings.push({ mesh, mat, sparks, spec: s, fadeIn: false, opacity: 0 });
+  });
+}
+buildRings();
+
+// ─── LABEL SYMBOLS & SHAPES ─────────────────────────────────────────────────
+const LABEL_SYMS = ['01','10','FF','A0','∑','∂','∇','⊕','∞','λ','→','0x','3E','%F','NL','&&','//','⊗','≡','↯','<<','>>','{}','[]'];
+
+function randomGeo() {
+  const r = Math.random();
+  if (r < 0.16) return new THREE.BoxGeometry(0.8, 0.8, 0.8);
+  if (r < 0.30) return new THREE.SphereGeometry(0.5, 8, 8);
+  if (r < 0.44) return new THREE.TetrahedronGeometry(0.6, 0);
+  if (r < 0.57) return new THREE.OctahedronGeometry(0.55, 0);
+  if (r < 0.70) return new THREE.IcosahedronGeometry(0.5, 0);
+  if (r < 0.84) return new THREE.CylinderGeometry(0.18, 0.38, 0.9, 6);
+  return new THREE.TorusGeometry(0.42, 0.14, 6, 8);
+}
+
+function drawLabel(lb) {
+  const { canvas, ctx, symIdx, colorStr } = lb;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = 'bold 18px "Courier New", monospace';
+  ctx.fillStyle = colorStr;
+  ctx.globalAlpha = 0.75;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(LABEL_SYMS[symIdx], canvas.width / 2, canvas.height / 2);
+  lb.tex.needsUpdate = true;
+}
+
+function makeLabel(node, colorHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 96; canvas.height = 36;
+  const ctx = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.5, 0.95, 1);
+  sprite.visible = node.mesh.visible;
+  scene.add(sprite);
+  const lb = {
+    sprite, canvas, ctx, tex,
+    colorStr: '#' + new THREE.Color(colorHex).getHexString(),
+    angle: Math.random() * Math.PI * 2,
+    angSpeed: (0.5 + Math.random() * 0.6) * (Math.random() > 0.5 ? 1 : -1),
+    radius: 1.2 + Math.random() * 0.5,
+    symIdx: Math.floor(Math.random() * LABEL_SYMS.length),
+    timer: 0,
+    interval: 0.35 + Math.random() * 0.7,
+  };
+  node.label = lb;
+  drawLabel(lb);
+}
+
+// ─── NODE FACTORY ─────────────────────────────────────────────────────────────
+function createNode(pos, colorHex, visible) {
+  const geo = randomGeo();
+
+  const col = new THREE.Color(colorHex);
+  const mat = new THREE.MeshStandardMaterial({
+    color: col.clone().multiplyScalar(0.1),
+    emissive: col,
+    emissiveIntensity: 0.22,
+    metalness: 0.7, roughness: 0.25,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(pos);
+  mesh.visible = visible;
+  scene.add(mesh);
+
+  const spriteMat = new THREE.SpriteMaterial({
+    map: glowTex,
+    color: col.clone(),
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: visible ? 0.28 : 0,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.scale.set(5, 5, 1);
+  sprite.position.copy(pos);
+  sprite.visible = visible;
+  scene.add(sprite);
+
+  const node = {
+    mesh, sprite, mat, spriteMat, col,
+    connections: [],
+    activated: false,
+    glowPulse: 0,
+    phase: Math.random() * Math.PI * 2,
+    label: null,
+  };
+  nodes.push(node);
+  return node;
+}
+
+// ─── RANDOM POSITION ─────────────────────────────────────────────────────────
+function rndPos(rMin, rMax) {
+  const phi   = Math.acos(1 - 2 * Math.random());
+  const theta = Math.random() * Math.PI * 2;
+  const r     = rMin + Math.random() * (rMax - rMin);
+  return new THREE.Vector3(
+    r * Math.sin(phi) * Math.cos(theta),
+    r * Math.cos(phi) * 0.45,
+    r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+// ─── BUILD CONNECTIONS ───────────────────────────────────────────────────────
+function buildConnections() {
+  while (lineGroup.children.length) lineGroup.remove(lineGroup.children[0]);
+  nodes.forEach(n => (n.connections.length = 0));
+
+  const active    = nodes.filter(n => n.mesh.visible);
+  const threshold = unlocked ? 22 : 14;
+  const maxConn   = unlocked ? 10 : 6;
+  const lineColors = [0xff44aa, 0x44ffcc, 0xaa44ff, 0xffaa44, 0x44aaff, 0xff88ee, 0x88ffdd];
+
+  for (let i = 0; i < active.length; i++) {
+    for (let j = i + 1; j < active.length; j++) {
+      const a = active[i], b = active[j];
+      if (a.connections.length >= maxConn || b.connections.length >= maxConn) continue;
+      const dist = a.mesh.position.distanceTo(b.mesh.position);
+      if (dist > threshold) continue;
+
+      const lineMat = new THREE.LineBasicMaterial({
+        color: unlocked ? lineColors[Math.floor(Math.random() * lineColors.length)] : 0x552266,
+        transparent: true,
+        opacity: unlocked ? 0.30 : 0.14,
+        depthWrite: false,
+      });
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([
+        a.mesh.position.clone(), b.mesh.position.clone(),
+      ]);
+      const line = new THREE.Line(lineGeo, lineMat);
+      lineGroup.add(line);
+
+      a.connections.push({ other: b, lineMat });
+      b.connections.push({ other: a, lineMat });
+    }
+  }
+}
+
+// ─── INITIAL 18 NODES ────────────────────────────────────────────────────────
+for (let i = 0; i < 18; i++) {
+  const n = createNode(rndPos(5, 18), INIT_COLORS[i % INIT_COLORS.length], true);
+  if (Math.random() < 0.55) makeLabel(n, INIT_COLORS[i % INIT_COLORS.length]);
+}
+buildConnections();
+
+// ─── PULSE FACTORY ───────────────────────────────────────────────────────────
+function spawnPulse(from, to, color) {
+  const mat  = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 5), mat);
+  mesh.position.copy(from);
+  scene.add(mesh);
+  pulses.push({ mesh, mat, from: from.clone(), to: to.clone(), t: 0, speed: 0.55 + Math.random() * 0.5 });
+}
+
+// ─── UI ──────────────────────────────────────────────────────────────────────
+const counterEl = document.getElementById('counter');
+const hintEl    = document.getElementById('hint');
+const unlockEl  = document.getElementById('unlock-msg');
+
+// ─── ACTIVATE NODE ───────────────────────────────────────────────────────────
+function activateNode(node) {
+  if (node.activated) return;
+  node.activated  = true;
+  node.glowPulse  = 1.0;
+  node.connections.forEach(conn => {
+    spawnPulse(node.mesh.position, conn.other.mesh.position, unlocked ? 0x00ffff : 0x4488ff);
+  });
+  activatedCount++;
+  counterEl.textContent = `NODES: ${Math.min(activatedCount, 3)} / 3`;
+  if (activatedCount >= 3 && !unlocked) triggerUnlock();
+}
+
+// ─── UNLOCK ──────────────────────────────────────────────────────────────────
+function triggerUnlock() {
+  unlocked = true;
+  hintEl.style.opacity   = '0';
+  counterEl.textContent  = 'SYSTEM: ONLINE';
+  counterEl.style.color  = '#00ffff';
+
+  // Flash
+  renderer.toneMappingExposure = 4.0;
+  setTimeout(() => { renderer.toneMappingExposure = 1.8; }, 200);
+
+  // Bloom boost
+  if (bloomPass) { bloomPass.strength = 2.8; bloomPass.radius = 0.85; }
+
+  // Chromatic aberration spike
+  if (chromaPass) chromaPass.uniforms.amount.value = 0.014;
+
+  // Show unlock message then slow-fade
+  unlockEl.style.opacity = '1';
+  setTimeout(() => {
+    unlockEl.style.transition = 'opacity 2.5s';
+    setTimeout(() => { unlockEl.style.opacity = '0'; }, 20);
+  }, 1600);
+
+  // Recolor existing nodes to neon
+  nodes.forEach(node => {
+    const c = new THREE.Color(NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)]);
+    node.col = c;
+    node.mat.emissive.copy(c);
+    node.spriteMat.color.copy(c);
+    node.mat.emissiveIntensity = Math.max(node.mat.emissiveIntensity, 0.6);
+    if (node.label) {
+      node.label.colorStr = '#' + c.getHexString();
+      drawLabel(node.label);
+    } else if (Math.random() < 0.5) {
+      makeLabel(node, NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)]);
+    }
+  });
+
+  // Expand fog after unlock
+  scene.fog = new THREE.FogExp2(0x050012, 0.007);
+  centerLight.color.set(0xff44ff);
+  centerLight.intensity = 2.5;
+
+  // Add 130 new hidden nodes
+  const newNodes = [];
+  for (let i = 0; i < 130; i++) {
+    const pos   = rndPos(2, 42);
+    const color = NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)];
+    const n = createNode(pos, color, false);
+    if (Math.random() < 0.65) makeLabel(n, color);
+    newNodes.push(n);
+  }
+
+  // Staggered reveal with scale + emissive fade-in
+  newNodes.forEach((node, i) => {
+    setTimeout(() => {
+      node.mesh.visible = true;
+      node.sprite.visible = true;
+      node.mesh.scale.setScalar(0.01);
+      node.mat.emissiveIntensity = 0;
+      node.spriteMat.opacity = 0;
+      const t0  = performance.now();
+      const dur = 700 + Math.random() * 1800;
+      (function reveal() {
+        const t    = Math.min((performance.now() - t0) / dur, 1);
+        const ease = 1 - Math.pow(1 - t, 3);  // cubic ease-out
+        node.mesh.scale.setScalar(ease);
+        node.mat.emissiveIntensity = ease * 0.9;
+        node.spriteMat.opacity     = ease * 0.5;
+        if (t < 1) requestAnimationFrame(reveal);
+      })();
+    }, 60 + i * 32 + Math.random() * 250);
+  });
+
+  // Rebuild connections once most nodes are visible
+  setTimeout(buildConnections, 5500);
+
+  // Spawn orbital rings staggered
+  rings.forEach((ring, i) => {
+    setTimeout(() => {
+      ring.fadeIn = true;
+    }, 1800 + i * 900);
+  });
+
+  // Show algorithm message after rings settle
+  const algoMsgEl = document.getElementById('algo-msg');
+  setTimeout(() => {
+    algoMsgEl.style.transition = 'opacity 2.8s';
+    algoMsgEl.style.opacity = '1';
+    // Let words sit, then fade and reveal code sequence
+    setTimeout(() => {
+      algoMsgEl.style.transition = 'opacity 3s';
+      algoMsgEl.style.opacity = '0';
+      // Show digit prompt after fade completes
+      setTimeout(initCodeSequence, 3200);
+    }, 11000);
+  }, 6500);
+
+  // Glitch flicker sequence
+  let gi = 0;
+  const glitch = setInterval(() => {
+    if (chromaPass) chromaPass.uniforms.amount.value = gi % 2 === 0 ? 0.028 : 0.006;
+    if (++gi > 18) {
+      if (chromaPass) chromaPass.uniforms.amount.value = 0.006;
+      clearInterval(glitch);
+    }
+  }, 75);
+}
+
+// ─── CODE SEQUENCE ───────────────────────────────────────────────────────────
+const CODE_SEQ = '0110101';
+
+function initCodeSequence() {
+  const promptEl = document.getElementById('code-prompt');
+  promptEl.style.opacity = '1';
+  document.addEventListener('keydown', onCodeKey);
+}
+
+function onCodeKey(e) {
+  if (!/^[01]$/.test(e.key)) return;
+  const spans = document.querySelectorAll('.digit');
+  if (e.key !== CODE_SEQ[codeIdx]) {
+    const s = spans[codeIdx];
+    const orig = s.style.color;
+    s.style.color = '#ff2200';
+    s.style.textShadow = '0 0 10px #ff2200';
+    setTimeout(() => { s.style.color = ''; s.style.textShadow = ''; }, 300);
+    return;
+  }
+  spans[codeIdx].classList.add('lit');
+  codeIdx++;
+  if (codeIdx >= CODE_SEQ.length) {
+    document.removeEventListener('keydown', onCodeKey);
+    setTimeout(() => {
+      spans.forEach(s => { s.classList.remove('lit'); s.classList.add('full'); });
+    }, 180);
+    // Connecting message
+    setTimeout(() => {
+      document.getElementById('code-prompt').style.transition = 'opacity 0.9s';
+      document.getElementById('code-prompt').style.opacity   = '0';
+      const connEl = document.getElementById('connecting-msg');
+      connEl.style.transition = 'opacity 0.4s';
+      connEl.style.opacity    = '1';
+      setTimeout(() => connEl.classList.add('on'), 100);
+      const dotsEl = document.getElementById('connect-dots');
+      let d = 0;
+      const dotInterval = setInterval(() => {
+        dotsEl.textContent = ['', '.', '..', '...'][d % 4];
+        d++;
+      }, 420);
+      setTimeout(() => clearInterval(dotInterval), 3000);
+    }, 1000);
+    // Heavy glitch
+    setTimeout(triggerHeavyGlitch, 2000);
+    // Camera fall
+    setTimeout(() => {
+      fallingState.active    = true;
+      fallingState.startTime = clock.elapsedTime;
+      fallingState.fallR     = orbitR;
+      fallingState.spinSpeed = 0.45;
+    }, 400);
+  }
+}
+
+function triggerHeavyGlitch() {
+  if (chromaPass) chromaPass.uniforms.amount.value = 0.06;
+  let gi = 0;
+  const hg = setInterval(() => {
+    const strength = 0.25 + gi * 0.04;
+    nodes.forEach(node => {
+      if (!node.mesh.visible || Math.random() > 0.38) return;
+      node.mesh.position.x += (Math.random() - 0.5) * strength;
+      node.mesh.position.y += (Math.random() - 0.5) * strength * 0.55;
+      node.mesh.position.z += (Math.random() - 0.5) * strength;
+      node.mat.emissiveIntensity = 0.5 + Math.random() * 4.0;
+    });
+    renderer.toneMappingExposure = 1.4 + Math.random() * 2.2;
+    if (++gi > 32) {
+      clearInterval(hg);
+      if (chromaPass) chromaPass.uniforms.amount.value = 0.014;
+    }
+  }, 52);
+}
+
+// ─── CONTROLS ────────────────────────────────────────────────────────────────
+const mouse = new THREE.Vector2();
+let mouseDown = false, lastMX = 0, lastMY = 0;
+let orbitTheta = 0, orbitPhi = 1.45, orbitR = 30;
+let tTheta     = 0, tPhi     = 1.45;
+const keys = {};
+
+window.addEventListener('mousemove', e => {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+  if (mouseDown) {
+    tTheta -= (e.clientX - lastMX) * 0.006;
+    tPhi    = Math.max(0.35, Math.min(Math.PI - 0.35, tPhi + (e.clientY - lastMY) * 0.006));
+    lastMX  = e.clientX;
+    lastMY  = e.clientY;
+  }
+});
+window.addEventListener('mousedown', e => { mouseDown = true;  lastMX = e.clientX; lastMY = e.clientY; });
+window.addEventListener('mouseup',   () => { mouseDown = false; });
+window.addEventListener('keydown',   e => { keys[e.code] = true;  });
+window.addEventListener('keyup',     e => { keys[e.code] = false; });
+
+const raycaster = new THREE.Raycaster();
+
+window.addEventListener('click', () => {
+  raycaster.setFromCamera(mouse, camera);
+  const meshes = nodes.filter(n => n.mesh.visible).map(n => n.mesh);
+  const hits   = raycaster.intersectObjects(meshes);
+  if (hits.length) {
+    const node = nodes.find(n => n.mesh === hits[0].object);
+    if (node) activateNode(node);
+  }
+});
+
+// ─── ANIMATE ─────────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const t  = clock.elapsedTime;
+
+  // Camera orbit (auto-drift + user control)
+  const autoAngle = t * 0.038;
+  const autoWave  = Math.sin(t * 0.18) * 0.22;   // gentle undulation
+
+  orbitTheta += (tTheta - orbitTheta) * 0.055;
+  orbitPhi   += (tPhi   - orbitPhi)   * 0.055;
+
+  if (!fallingState.active) {
+    if (keys['KeyW'] || keys['ArrowUp'])    orbitR = Math.max(4,  orbitR - 10 * dt);
+    if (keys['KeyS'] || keys['ArrowDown'])  orbitR = Math.min(70, orbitR + 10 * dt);
+    if (keys['KeyA'] || keys['ArrowLeft'])  tTheta -= dt * 0.9;
+    if (keys['KeyD'] || keys['ArrowRight']) tTheta += dt * 0.9;
+  }
+
+  // Camera fall — 1s spin then white blaze to symbols.html
+  if (fallingState.active) {
+    const fe = clock.elapsedTime - fallingState.startTime;
+
+    // Spin hard for first second
+    fallingState.spinSpeed = Math.min(fallingState.spinSpeed + dt * 4.0, 9.0);
+    tTheta += fallingState.spinSpeed * dt;
+    tPhi   += dt * 0.35;
+    orbitR  = Math.max(0.02, fallingState.fallR * Math.pow(Math.max(0, 1 - fe / 0.5), 2.0));
+
+    // After 0.25s start blazing white
+    const blazeStart = 0.25;
+    const fallProgress = Math.max(0, Math.min((fe - blazeStart) / 0.4, 1.0));
+    if (fallProgress > 0) {
+      const blazeEI = fallProgress * fallProgress * 12.0;
+      nodes.forEach(node => {
+        if (!node.mesh.visible) return;
+        node.mat.emissiveIntensity = Math.max(node.mat.emissiveIntensity, blazeEI);
+        node.spriteMat.opacity = Math.min(1.0, 0.5 + fallProgress * 0.5);
+      });
+      if (bloomPass) bloomPass.strength = 2.8 + fallProgress * 8.0;
+      renderer.toneMappingExposure = 1.8 + fallProgress * fallProgress * 10.0;
+      if (chromaPass) chromaPass.uniforms.amount.value = 0.006 + fallProgress * 0.16;
+    }
+
+    if (fe > 0.7) { window.location.href = 'spin.html'; }
+  }
+
+  const th = orbitTheta + autoAngle;
+  const ph = orbitPhi   + autoWave;
+
+  camera.position.set(
+    orbitR * Math.sin(ph) * Math.cos(th),
+    orbitR * Math.cos(ph),
+    orbitR * Math.sin(ph) * Math.sin(th)
+  );
+  camera.lookAt(0, 0, 0);
+
+  // Hover detection
+  raycaster.setFromCamera(mouse, camera);
+  const visMeshes  = nodes.filter(n => n.mesh.visible).map(n => n.mesh);
+  const hoverHits  = raycaster.intersectObjects(visMeshes);
+  const newHovered = hoverHits.length ? nodes.find(n => n.mesh === hoverHits[0].object) : null;
+
+  if (newHovered !== hoveredNode) {
+    if (hoveredNode && !hoveredNode.activated) {
+      hoveredNode.mat.emissiveIntensity = 0.5;
+      hoveredNode.mesh.scale.setScalar(1);
+    }
+    hoveredNode = newHovered;
+    document.body.style.cursor = hoveredNode ? 'pointer' : 'crosshair';
+  }
+
+  // Update each node
+  nodes.forEach(node => {
+    if (!node.mesh.visible) return;
+
+    node.mesh.rotation.y += dt * (0.18 + Math.sin(node.phase) * 0.08);
+    node.mesh.rotation.x += dt * 0.09;
+
+    if (node === hoveredNode && !node.activated) {
+      node.mat.emissiveIntensity = 1.1 + Math.sin(t * 5.5) * 0.2;
+      node.mesh.scale.setScalar(1.25 + Math.sin(t * 5.5) * 0.04);
+      node.spriteMat.opacity = 0.55;
+    } else if (!node.activated) {
+      const idle = 0.22 + Math.sin(t * 1.3 + node.phase) * 0.1;
+      node.mat.emissiveIntensity = idle;
+      node.spriteMat.opacity = 0.12 + idle * 0.22;
+    }
+
+    if (node.activated) {
+      node.glowPulse = Math.max(0, node.glowPulse - dt * 0.45);
+      const ei = (unlocked ? 0.8 : 0.65) + node.glowPulse * 1.4;
+      node.mat.emissiveIntensity = ei;
+      node.mesh.scale.setScalar(1.1 + node.glowPulse * 0.35);
+      node.spriteMat.opacity = 0.28 + node.glowPulse * 0.45;
+    }
+
+    // Sync glow sprite
+    node.sprite.position.copy(node.mesh.position);
+    const gs = 3.2 + node.mat.emissiveIntensity * 0.9;
+    node.sprite.scale.set(gs, gs, 1);
+
+    // Animate orbiting label
+    if (node.label) {
+      const lb = node.label;
+      lb.angle += dt * lb.angSpeed;
+      lb.timer += dt;
+      lb.sprite.visible = node.mesh.visible;
+      if (node.mesh.visible) {
+        lb.sprite.position.set(
+          node.mesh.position.x + Math.cos(lb.angle) * lb.radius,
+          node.mesh.position.y + Math.sin(lb.angle * 0.6) * 0.4,
+          node.mesh.position.z + Math.sin(lb.angle) * lb.radius
+        );
+        if (lb.timer > lb.interval) {
+          lb.timer = 0;
+          lb.symIdx = (lb.symIdx + 1) % LABEL_SYMS.length;
+          drawLabel(lb);
+        }
+      }
+    }
+  });
+
+  // Update traveling pulses
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i];
+    p.t += dt * p.speed;
+    if (p.t >= 1) {
+      scene.remove(p.mesh);
+      pulses.splice(i, 1);
+    } else {
+      p.mesh.position.lerpVectors(p.from, p.to, p.t);
+      p.mat.opacity = 1 - p.t * 0.55;
+    }
+  }
+
+  // Auto-pulses: slow before unlock, constant stream after
+  const pulseChance = unlocked ? 0.04 : 0.006;
+  if (Math.random() < pulseChance) {
+    const vis = nodes.filter(n => n.mesh.visible && n.connections.length > 0);
+    if (vis.length) {
+      const n = vis[Math.floor(Math.random() * vis.length)];
+      const c = n.connections[Math.floor(Math.random() * n.connections.length)];
+      const col = unlocked
+        ? NEON_COLORS[Math.floor(Math.random() * NEON_COLORS.length)]
+        : 0x4488ff;
+      spawnPulse(n.mesh.position, c.other.mesh.position, col);
+    }
+  }
+
+  // Random line flicker after unlock
+  if (unlocked && Math.random() < 0.012) {
+    lineGroup.children.forEach(line => {
+      line.material.opacity = 0.08 + Math.random() * 0.65;
+    });
+  }
+
+  // Animate orbital rings
+  rings.forEach(ring => {
+    if (!ring.fadeIn && ring.opacity === 0) return;
+    if (ring.fadeIn) {
+      ring.opacity = Math.min(ring.opacity + dt * 0.35, 1);
+      if (ring.opacity >= 1) ring.fadeIn = false;
+    }
+    const targetAlpha = unlocked ? ring.opacity * 0.55 : 0;
+    ring.mat.opacity += (targetAlpha - ring.mat.opacity) * 0.05;
+    ring.mesh.rotation.y += dt * ring.spec.speed;
+
+    // move spark dots along ring path
+    ring.sparks.forEach(sk => {
+      sk.angle += dt * ring.spec.speed * 2.8;
+      const r = ring.spec.radius;
+      const p = new THREE.Vector3(Math.cos(sk.angle) * r, 0, Math.sin(sk.angle) * r);
+      p.applyEuler(ring.mesh.rotation);
+      sk.sprite.position.copy(p);
+      sk.mat.opacity = ring.mat.opacity * (0.55 + Math.sin(t * 3.5 + sk.angle) * 0.35);
+    });
+  });
+
+  // Render
+  if (composer) composer.render();
+  else renderer.render(scene, camera);
+}
+
+animate();
+
+// ─── RESIZE ──────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  if (composer) {
+    composer.setSize(innerWidth, innerHeight);
+    if (bloomPass) bloomPass.setSize(innerWidth, innerHeight);
+  }
+});
+</script>
+</body>
+</html>

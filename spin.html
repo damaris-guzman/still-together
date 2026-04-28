@@ -1,0 +1,3236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; }
+        #canvas { display: block; }
+        #hud {
+            position: fixed; bottom: 18px; left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Courier New', monospace;
+            font-size: 13px; letter-spacing: 0.5em;
+            color: rgba(255, 255, 255, 0.55);
+            text-transform: uppercase; pointer-events: none; white-space: nowrap;
+        }
+        #prompt {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Courier New', monospace;
+            font-size: 17px; letter-spacing: 0.55em;
+            color: rgba(255, 255, 255, 0.85);
+            text-transform: uppercase; pointer-events: none;
+            text-align: center; line-height: 2.4;
+            transition: opacity 0.7s;
+        }
+        #prompt span { font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 0.35em; }
+        #portal-flash {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; opacity: 0; z-index: 20;
+            background: radial-gradient(ellipse at center, rgba(180,80,255,0.9) 0%, rgba(0,200,255,0.7) 50%, rgba(0,0,0,0) 100%);
+            transition: opacity 0.06s;
+        }
+        #auth-msg {
+            position: fixed; top: 30%; left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Courier New', monospace;
+            font-size: 17px; letter-spacing: 0.48em;
+            color: #00ff88; text-transform: uppercase;
+            text-shadow: 0 0 14px rgba(0,255,136,0.9), 0 0 28px rgba(0,255,136,0.4);
+            pointer-events: none; opacity: 0; white-space: nowrap;
+            transition: opacity 0.28s; z-index: 30;
+        }
+        #narr-msg {
+            position: fixed; bottom: 20%; left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Courier New', monospace;
+            font-size: 13px; letter-spacing: 0.58em;
+            color: rgba(205,178,255,0.92); text-transform: lowercase;
+            text-shadow: 0 0 10px rgba(180,130,255,0.65);
+            pointer-events: none; opacity: 0; white-space: nowrap;
+            transition: opacity 0.55s; z-index: 30;
+        }
+        #ascend-msg {
+            position: fixed; top: 44%; left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Courier New', monospace;
+            font-size: 17px; color: #ffffff;
+            text-align: center; line-height: 2.1;
+            text-shadow: 0 0 22px rgba(255,255,255,0.98), 0 0 45px rgba(200,220,255,0.5);
+            pointer-events: none; opacity: 0;
+            transition: opacity 1.3s; z-index: 40;
+        }
+        #fade-cover {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #ffffff; pointer-events: none; opacity: 0;
+            z-index: 50; transition: opacity 2s;
+        }
+        #aura-indicator {
+            position: fixed; top: 14px; right: 22px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px; letter-spacing: 0.44em;
+            color: rgba(180,255,220,0); text-transform: uppercase;
+            pointer-events: none; z-index: 25;
+        }
+        #aura-msg {
+            position: fixed; top: 24%; left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Courier New', monospace;
+            font-size: 14px; letter-spacing: 0.52em;
+            color: rgba(200,255,230,0.95); text-transform: lowercase;
+            text-shadow: 0 0 12px rgba(150,255,210,0.75);
+            pointer-events: none; opacity: 0; white-space: nowrap;
+            transition: opacity 0.85s; z-index: 30;
+        }
+        #canvas { will-change: filter; }
+        #reflect-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.85); opacity: 0; pointer-events: none;
+            transition: opacity 0.4s; z-index: 67;
+        }
+        #reflect-overlay.open { opacity: 1; pointer-events: all; }
+        #reflect-overlay img {
+            max-width: min(88vw, 820px); max-height: 88vh;
+            box-shadow: 0 0 60px rgba(0,0,0,0.9);
+        }
+        #reflect-close {
+            position: absolute; top: 18px; right: 24px;
+            font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.35em;
+            color: rgba(255,255,255,0.5); cursor: pointer; text-transform: uppercase;
+        }
+        #sock-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 28px;
+            background: rgba(0,0,0,0.82); opacity: 0; pointer-events: none;
+            transition: opacity 0.4s; z-index: 66;
+        }
+        #sock-overlay.open { opacity: 1; pointer-events: all; }
+        #sock-overlay img {
+            max-width: min(360px, 80vw); max-height: 45vh;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+        #sock-text {
+            font-family: Georgia, serif; font-size: 18px; line-height: 1.85;
+            text-align: center; max-width: min(520px, 88vw);
+            font-weight: bold;
+            background: linear-gradient(90deg,#ff0000,#ff9900,#ffff00,#00ff88,#00ccff,#9900ff,#ff00aa,#ff0000);
+            background-size: 200% auto;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: rainbowMove 3s linear infinite;
+        }
+        @keyframes rainbowMove {
+            0%   { background-position: 0% center; }
+            100% { background-position: 200% center; }
+        }
+        #sock-close {
+            position: absolute; top: 18px; right: 24px;
+            font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.35em;
+            color: rgba(255,255,255,0.5); cursor: pointer; text-transform: uppercase;
+        }
+        #video-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.88); opacity: 0; pointer-events: none;
+            transition: opacity 0.4s; z-index: 65;
+        }
+        #video-overlay.open { opacity: 1; pointer-events: all; }
+        #video-overlay video {
+            max-width: 88vw; max-height: 82vh;
+            box-shadow: 0 0 60px rgba(0,0,0,0.9);
+        }
+        #video-close {
+            position: absolute; top: 18px; right: 24px;
+            font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.35em;
+            color: rgba(255,255,255,0.5); cursor: pointer; text-transform: uppercase;
+        }
+        #book-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.72); opacity: 0; pointer-events: none;
+            transition: opacity 0.4s; z-index: 60;
+        }
+        #book-overlay.open { opacity: 1; pointer-events: all; }
+        #book-page {
+            background: #f5edd8;
+            width: min(520px, 88vw); max-height: 72vh;
+            padding: 42px 48px; overflow-y: auto;
+            font-family: Georgia, serif; font-size: 15px; line-height: 1.9;
+            color: #1a1208; box-shadow: 0 0 60px rgba(0,0,0,0.8);
+            border: 1px solid rgba(160,140,100,0.4);
+            white-space: pre-wrap;
+        }
+        #book-close {
+            position: absolute; top: 18px; right: 24px;
+            font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.35em;
+            color: rgba(255,255,255,0.5); cursor: pointer; text-transform: uppercase;
+        }
+        #inv-msg {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Courier New', monospace; font-size: 13px; letter-spacing: 0.45em;
+            color: #00ff88; text-transform: uppercase; pointer-events: none; opacity: 0;
+            text-shadow: 0 0 10px rgba(0,255,136,0.8), 0 0 24px rgba(0,255,136,0.4);
+            white-space: nowrap; z-index: 30; transition: opacity 0.4s;
+        }
+        #inv-status {
+            position: fixed; top: 14px; left: 22px;
+            font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.38em;
+            color: rgba(0,255,136,0); text-transform: uppercase; pointer-events: none; z-index: 25;
+        }
+        #fridge-prompt {
+            position: fixed; bottom: 52px; left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.45em;
+            color: rgba(200,255,240,0.7); text-transform: uppercase; pointer-events: none;
+            opacity: 0; transition: opacity 0.35s; z-index: 28; white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="hud">W · A · S · D · follow the path · F x-ray · E interact</div>
+<div id="portal-flash"></div>
+<div id="prompt">click to begin<br><span>follow the signs · space to jump · F to see</span></div>
+<div id="auth-msg"></div>
+<div id="narr-msg"></div>
+<div id="ascend-msg"></div>
+<div id="fade-cover"></div>
+<div id="aura-indicator"></div>
+<div id="aura-msg"></div>
+<div id="reflect-overlay"><img src="reflect.jpg" alt="reflect"><div id="reflect-close">E · close</div></div>
+<div id="sock-overlay"><img src="sock.jpg" alt="sock"><div id="sock-text">I enjoy socks. They r my fav fruit. When I eat them in the shower, I think to myself &ldquo;yes&rdquo;. When I eat them at the table, I think to myself &ldquo;no&rdquo;.</div><div id="sock-close">E · close</div></div>
+<div id="video-overlay"><video id="paint-video" src="maris-2020.mp4" controls></video><div id="video-close">E · close</div></div>
+<div id="book-overlay"><div id="book-page"></div><div id="book-close">E · close</div></div>
+<div id="inv-msg"></div>
+<div id="inv-status">● STATUS: PROTECTED</div>
+<div id="fridge-prompt">E · open</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════
+// SPIN — neon afterlife — follow the path
+// ═══════════════════════════════════════════════════
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000814);
+scene.fog = new THREE.FogExp2(0x08001a, 0.013);
+
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 350);
+camera.position.set(0, 1.7, 0);
+
+const renderer = new THREE.WebGLRenderer({
+    canvas: document.getElementById('canvas'),
+    antialias: true
+});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const clock = new THREE.Clock();
+let elapsed = 0;
+
+// ── INPUT ──────────────────────────────────────────
+const keys = {};
+let locked = false, yaw = 0, pitch = 0;
+const camPos = new THREE.Vector3(0, 1.7, 0);
+const moveEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+const fwd = new THREE.Vector3();
+const right = new THREE.Vector3();
+
+document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keyup',   e => { keys[e.code] = false; });
+document.addEventListener('click', () => { if (!locked) document.body.requestPointerLock(); });
+document.addEventListener('pointerlockchange', () => {
+    locked = !!document.pointerLockElement;
+    document.getElementById('prompt').style.opacity = locked ? '0' : '1';
+});
+document.addEventListener('mousemove', e => {
+    if (!locked) return;
+    yaw   -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch  = Math.max(-1.1, Math.min(1.1, pitch));
+});
+
+// ── LIGHTS ─────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x18063a, 3.5));
+[
+    [0xff6600, 80,  [  0, 12,   0]],
+    [0xff00aa, 55,  [ 60, 12, -45]],
+    [0x00ccff, 55,  [-65, 12,  35]],
+    [0xffcc00, 45,  [ 30, 12,  85]],
+    [0x9900ff, 45,  [-45, 12, -85]],
+    [0x00ff88, 40,  [ 90, 12,  15]],
+].forEach(([c, r, p]) => {
+    const l = new THREE.PointLight(c, 2.2, r);
+    l.position.set(...p);
+    scene.add(l);
+});
+
+// ── GLOW TEXTURE ───────────────────────────────────
+const glowTex = (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0,   'rgba(255,255,255,1)');
+    g.addColorStop(0.3, 'rgba(255,255,255,0.5)');
+    g.addColorStop(1,   'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(32, 32, 32, 0, Math.PI * 2); ctx.fill();
+    return new THREE.CanvasTexture(c);
+})();
+
+function makeSymTex(sym, color, size) {
+    size = size || 128;
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    const hex = '#' + color.toString(16).padStart(6, '0');
+    ctx.shadowColor = hex;
+    ctx.shadowBlur = size * 0.3;
+    ctx.fillStyle = hex;
+    ctx.font = 'bold ' + (size * 0.62) + 'px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(sym, size / 2, size / 2);
+    ctx.globalAlpha = 0.35;
+    ctx.font = 'bold ' + (size * 0.7) + 'px Arial';
+    ctx.fillText(sym, size / 2, size / 2);
+    ctx.globalAlpha = 1;
+    return new THREE.CanvasTexture(c);
+}
+
+// ── GROUND ─────────────────────────────────────────
+(function() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 512;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#03010a';
+    ctx.fillRect(0, 0, 512, 512);
+    ctx.strokeStyle = 'rgba(55, 0, 90, 0.13)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 32; i++) {
+        const p = i * 16;
+        ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 512); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(512, p); ctx.stroke();
+    }
+    for (let i = 0; i < 110; i++) {
+        const x = Math.random() * 512, y = Math.random() * 512;
+        ctx.beginPath(); ctx.arc(x, y, 1 + Math.random() * 2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,' + (80 + Math.random() * 100 | 0) + ',0,0.07)';
+        ctx.fill();
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(24, 24);
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(450, 450),
+        new THREE.MeshBasicMaterial({ map: tex })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+}());
+
+// ── STARS ──────────────────────────────────────────
+(function() {
+    const pos = [];
+    for (let i = 0; i < 2000; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi   = Math.acos(Math.random() * 2 - 1);
+        const r = 200 + Math.random() * 80;
+        pos.push(
+            r * Math.sin(phi) * Math.cos(theta),
+            Math.abs(r * Math.cos(phi)) + 10,
+            r * Math.sin(phi) * Math.sin(theta)
+        );
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+        color: 0xffffff, size: 0.55, transparent: true, opacity: 0.5
+    })));
+}());
+
+// ── NEON PALETTE ───────────────────────────────────
+const NEON = [0xff6600, 0xff00aa, 0x00ccff, 0xffcc00, 0x9900ff, 0x00ff88, 0xff3366, 0x33bbff];
+
+var buildings  = [];   // active buildings for collision
+var glitching  = [];   // { group, t, ox, oz } currently dissolving
+
+// ── BUILDINGS ──────────────────────────────────────
+function makeBuilding(x, z, w, h, d, color) {
+    const g = new THREE.Group();
+
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshBasicMaterial({ color: 0x04010d })
+    );
+    body.position.y = h / 2;
+    g.add(body);
+
+    const wire = new THREE.Mesh(
+        new THREE.BoxGeometry(w + 0.18, h + 0.18, d + 0.18),
+        new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.22 })
+    );
+    wire.position.y = h / 2;
+    g.add(wire);
+
+    for (let y = 2; y < h; y += 2.5 + Math.random() * 3.5) {
+        if (Math.random() < 0.28) continue;
+        const band = new THREE.Mesh(
+            new THREE.BoxGeometry(w + 0.22, 0.1, d + 0.22),
+            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6 })
+        );
+        band.position.y = y;
+        g.add(band);
+    }
+
+    const beacon = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color, transparent: true, opacity: 0.4,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    beacon.position.y = h + 1.5;
+    beacon.scale.setScalar(5 + Math.random() * 5);
+    g.add(beacon);
+
+    if (h > 16 && Math.random() > 0.4) {
+        const tw = w * (0.5 + Math.random() * 0.3);
+        const td = d * (0.5 + Math.random() * 0.3);
+        const th = 4 + Math.random() * 10;
+        const tb = new THREE.Mesh(
+            new THREE.BoxGeometry(tw, th, td),
+            new THREE.MeshBasicMaterial({ color: 0x04010d })
+        );
+        tb.position.y = h + th / 2;
+        g.add(tb);
+        const tw2 = new THREE.Mesh(
+            new THREE.BoxGeometry(tw + 0.12, th + 0.12, td + 0.12),
+            new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.3 })
+        );
+        tw2.position.y = h + th / 2;
+        g.add(tw2);
+    }
+
+    g.position.set(x, 0, z);
+    g.userData.bw = w;
+    g.userData.bd = d;
+    scene.add(g);
+    buildings.push(g);
+    return g;
+}
+
+// Cabinet at (-22, 0, 9) — keep a 12-unit clear radius around it
+function tooNearCabinet(x, z) {
+    var dx = x - (-22), dz = z - 9;
+    return dx*dx + dz*dz < 144;
+}
+
+for (let i = 0; i < 30; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 35 + Math.random() * 100;
+    const bx = Math.cos(a) * d, bz = Math.sin(a) * d;
+    if (tooNearCabinet(bx, bz)) continue;
+    const c = NEON[Math.floor(Math.random() * NEON.length)];
+    makeBuilding(bx, bz, 3 + Math.random() * 7, 8 + Math.random() * 35, 3 + Math.random() * 7, c);
+}
+[[-14,-18],[16,6],[-10,22],[22,-12],[-20,12],[8,-25],[25,20]].forEach(function(pos, i) {
+    if (tooNearCabinet(pos[0], pos[1])) return;
+    makeBuilding(pos[0], pos[1],
+        4 + Math.random() * 4, 15 + Math.random() * 25, 4 + Math.random() * 4,
+        NEON[i % NEON.length]);
+});
+
+// ── NEON TREES ─────────────────────────────────────
+function makeTree(x, z, color) {
+    const g = new THREE.Group();
+    const trunkH = 3 + Math.random() * 3;
+    const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.28, trunkH, 7),
+        new THREE.MeshBasicMaterial({ color: 0x150028 })
+    );
+    trunk.position.y = trunkH / 2;
+    g.add(trunk);
+
+    const layers = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < layers; i++) {
+        const r = 1.8 + Math.random() * 2 - i * 0.35;
+        const canopy = new THREE.Mesh(
+            new THREE.SphereGeometry(r, 8, 6),
+            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.65 + Math.random() * 0.2 })
+        );
+        canopy.position.y = trunkH + 0.5 + i * 1.8 + Math.random() * 0.5;
+        g.add(canopy);
+        const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color, transparent: true, opacity: 0.22,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        halo.position.y = canopy.position.y;
+        halo.scale.setScalar((r + 1.5) * 2.8);
+        g.add(halo);
+    }
+    g.position.set(x, 0, z);
+    scene.add(g);
+}
+
+for (let i = 0; i < 45; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 12 + Math.random() * 85;
+    makeTree(Math.cos(a) * d, Math.sin(a) * d, NEON[Math.floor(Math.random() * NEON.length)]);
+}
+
+// ── PORTAL RINGS ───────────────────────────────────
+const spinners = [];
+for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
+    const d = 18 + Math.random() * 65;
+    const color = NEON[i % NEON.length];
+    const radius = 3.5 + Math.random() * 3;
+
+    // Group so inner disc inherits torus rotation
+    const pg = new THREE.Group();
+
+    const torus = new THREE.Mesh(
+        new THREE.TorusGeometry(radius, 0.22, 12, 60),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 })
+    );
+    pg.add(torus);
+
+    // Inner portal disc — semi-transparent, additive
+    const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(radius - 0.1, 48),
+        new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.12,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        })
+    );
+    pg.add(disc);
+
+    // Reachable heights: 3–7 units so a jump can thread them
+    pg.position.set(Math.cos(a) * d, 3.5 + Math.random() * 3.5, Math.sin(a) * d);
+    pg.rotation.x = Math.random() * Math.PI;
+    pg.rotation.z = Math.random() * Math.PI;
+    pg.userData = {
+        rs: {
+            x: (Math.random() - 0.5) * 1.2,
+            y: (Math.random() - 0.5) * 0.9,
+            z: (Math.random() - 0.5) * 1.0
+        },
+        radius,
+        color,
+        torusMat: torus.material,
+        discMat: disc.material,
+        baseOpacity: 0.9
+    };
+    scene.add(pg);
+    spinners.push(pg);
+
+    // Ambient glow halo at ring position
+    const rg = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color, transparent: true, opacity: 0.18,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    rg.position.copy(pg.position);
+    rg.scale.setScalar(radius * 4);
+    scene.add(rg);
+}
+
+// ── NEON ARCHES ────────────────────────────────────
+for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const d = 20 + Math.random() * 45;
+    const color = NEON[(i + 2) % NEON.length];
+    const width = 6 + Math.random() * 6;
+    const height = 10 + Math.random() * 8;
+    const g = new THREE.Group();
+
+    [-width / 2, width / 2].forEach(function(px) {
+        const p = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.22, 0.28, height, 8),
+            new THREE.MeshBasicMaterial({ color: 0x050110 })
+        );
+        p.position.set(px, height / 2, 0);
+        g.add(p);
+        const pw = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.25, 0.31, height + 0.1, 8),
+            new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.35 })
+        );
+        pw.position.set(px, height / 2, 0);
+        g.add(pw);
+    });
+
+    const arch = new THREE.Mesh(
+        new THREE.TorusGeometry(width / 2, 0.2, 8, 32, Math.PI),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 })
+    );
+    arch.position.y = height;
+    arch.rotation.z = Math.PI;
+    g.add(arch);
+
+    g.position.set(Math.cos(a) * d, 0, Math.sin(a) * d);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(g);
+}
+
+// ── FREEDOM STREET SIGN ────────────────────────────
+(function() {
+    var sg = new THREE.Group();
+
+    // pole
+    var pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.07, 4.8, 10),
+        new THREE.MeshBasicMaterial({ color: 0x888880 })
+    );
+    pole.position.y = 2.4;
+    sg.add(pole);
+
+    // sign board — green like a real street sign
+    var board = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 0.52, 0.06),
+        new THREE.MeshBasicMaterial({ color: 0x1a5c1a })
+    );
+    board.position.y = 4.55;
+    sg.add(board);
+
+    // white border strip
+    var border = new THREE.Mesh(
+        new THREE.BoxGeometry(2.46, 0.58, 0.055),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 })
+    );
+    border.position.y = 4.55;
+    sg.add(border);
+
+    // FREEDOM text as sprite on the face
+    var fc = document.createElement('canvas');
+    fc.width = 384; fc.height = 80;
+    var fctx = fc.getContext('2d');
+    fctx.fillStyle = '#1a5c1a';
+    fctx.fillRect(0, 0, 384, 80);
+    fctx.strokeStyle = '#ffffff';
+    fctx.lineWidth = 3;
+    fctx.strokeRect(4, 4, 376, 72);
+    fctx.fillStyle = '#ffffff';
+    fctx.font = 'bold 46px Arial, sans-serif';
+    fctx.textAlign = 'center';
+    fctx.textBaseline = 'middle';
+    fctx.fillText('FREEDOM', 192, 40);
+    var faceSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(fc), transparent: true, opacity: 0.97, depthWrite: false
+    }));
+    faceSprite.position.y = 4.55;
+    faceSprite.scale.set(2.4, 0.52, 1);
+    sg.add(faceSprite);
+
+    // subtle glow around sign
+    var glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: 0x44ff44, transparent: true, opacity: 0.12,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    glow.position.y = 4.55;
+    glow.scale.setScalar(5);
+    sg.add(glow);
+
+    // handprint painted on the pole
+    var hc = document.createElement('canvas');
+    hc.width = 128; hc.height = 128;
+    var hctx = hc.getContext('2d');
+    // transparent base so it wraps the cylinder cleanly
+    hctx.clearRect(0, 0, 128, 128);
+    hctx.fillStyle = 'rgba(180,30,10,0.82)';
+    // palm
+    hctx.beginPath();
+    hctx.ellipse(64, 82, 26, 30, 0, 0, Math.PI * 2);
+    hctx.fill();
+    // thumb
+    hctx.beginPath();
+    hctx.ellipse(32, 72, 9, 18, -0.7, 0, Math.PI * 2);
+    hctx.fill();
+    // fingers
+    var fingers = [[44,44,7,20,-0.25],[56,38,7,22,0],[68,38,7,22,0.08],[80,42,7,20,0.28]];
+    fingers.forEach(function(f) {
+        hctx.beginPath();
+        hctx.ellipse(f[0], f[1], f[2], f[3], f[4], 0, Math.PI * 2);
+        hctx.fill();
+    });
+    // smear drips
+    hctx.fillStyle = 'rgba(140,15,5,0.5)';
+    hctx.fillRect(56, 110, 6, 16);
+    hctx.fillRect(70, 108, 5, 12);
+
+    var handTex = new THREE.CanvasTexture(hc);
+    var handMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.065, 0.075, 0.55, 10, 1, true),
+        new THREE.MeshBasicMaterial({ map: handTex, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+    );
+    handMesh.position.y = 1.55;
+    sg.add(handMesh);
+
+    sg.position.set(12, 0, -14);
+    sg.rotation.y = -0.4;
+    scene.add(sg);
+}());
+
+// ── FLOATING NEON SIGNS ────────────────────────────
+var signTexts = ['◈  ◈  ◈', '⬡  ✦  ⬡', '⟐  ⊕  ⟐', '∞  ∞  ∞', '◆ ◇ ◆',
+    'null → void', 'follow . follow', '⬟ ⬢ ⬟ ⬢', 'lost here', '◉ ⊗ ◉',
+    'this way →', '← that way', 'still here', 'where?', '???  ???'];
+
+var glitchWords = ['real', 'win', 'winning', 'lucky', 'based', 'thriving', 'HAPPY AF',
+    'winning', 'thriving', 'real', 'lucky', 'based', 'HAPPY AF', 'win'];
+
+function makeSignTex(txt, hexColor) {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 56;
+    var ctx = c.getContext('2d');
+    ctx.shadowColor = hexColor; ctx.shadowBlur = 18;
+    ctx.fillStyle = hexColor;
+    ctx.font = 'bold 20px Courier New, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, 128, 28);
+    return new THREE.CanvasTexture(c);
+}
+
+var floatSigns = [];
+for (var si = 0; si < 24; si++) {
+    var sa = Math.random() * Math.PI * 2;
+    var sd = 18 + Math.random() * 85;
+    var sc = NEON[Math.floor(Math.random() * NEON.length)];
+    var shex = '#' + sc.toString(16).padStart(6, '0');
+    var origText = signTexts[si % signTexts.length];
+    var fsSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeSignTex(origText, shex), transparent: true, opacity: 0.7
+    }));
+    fsSprite.position.set(Math.cos(sa) * sd, 6 + Math.random() * 14, Math.sin(sa) * sd);
+    fsSprite.scale.set(8, 2.2, 1);
+    fsSprite.userData = {
+        baseY: fsSprite.position.y,
+        speed: 0.25 + Math.random() * 0.45,
+        phase: Math.random() * Math.PI * 2,
+        origText: origText,
+        hexColor: shex,
+        glitchTimer: 4 + Math.random() * 12,   // next glitch in N seconds
+        glitching: false,
+        glitchDur: 0
+    };
+    scene.add(fsSprite);
+    floatSigns.push(fsSprite);
+}
+
+// ── SOCK ───────────────────────────────────────────
+(function() {
+    var tc = document.createElement('canvas');
+    tc.width = tc.height = 256;
+    var tctx = tc.getContext('2d');
+    tctx.fillStyle = '#f4f2ef';
+    tctx.fillRect(0, 0, 256, 256);
+    // Tiny sock silhouette pattern
+    tctx.fillStyle = '#b0ac9e';
+    for (var sr = 0; sr < 7; sr++) {
+        for (var sc = 0; sc < 6; sc++) {
+            var mx = sc * 38 + (sr % 2) * 19 + 4;
+            var my = sr * 34 + 4;
+            tctx.fillRect(mx + 4, my, 8, 14);         // leg
+            tctx.fillRect(mx, my + 10, 19, 7);        // foot
+            tctx.beginPath();
+            tctx.arc(mx + 19, my + 13, 5, -Math.PI / 2, Math.PI / 2);
+            tctx.fill();                               // toe
+        }
+    }
+    var sockTex = new THREE.CanvasTexture(tc);
+    var smat = new THREE.MeshBasicMaterial({ map: sockTex, side: THREE.DoubleSide });
+
+    var sg = new THREE.Group();
+
+    var cuffM = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.31, 0.22, 14), smat);
+    cuffM.position.y = 1.15;
+    sg.add(cuffM);
+
+    var legM = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.28, 0.82, 12), smat);
+    legM.position.y = 0.70;
+    sg.add(legM);
+
+    var heelM = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), smat);
+    heelM.position.set(0, 0.26, 0.08);
+    heelM.scale.set(0.95, 0.85, 1.2);
+    sg.add(heelM);
+
+    var footM = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.25, 0.68, 10), smat);
+    footM.rotation.x = Math.PI / 2;
+    footM.position.set(0, 0.17, 0.44);
+    sg.add(footM);
+
+    var toeM = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), smat);
+    toeM.position.set(0, 0.17, 0.80);
+    sg.add(toeM);
+
+    // tip it over so it lies on the ground casually
+    sg.rotation.z = Math.PI / 2 + 0.12;
+    sg.rotation.y = 1.2;
+    sg.position.set(18, 0.30, 12);
+    scene.add(sg);
+}());
+
+// ── OFFICE DRAWER ──────────────────────────────────
+(function() {
+    var og = new THREE.Group();
+    var cabinetMat = new THREE.MeshBasicMaterial({ color: 0x8a8880 });
+    var darkMat    = new THREE.MeshBasicMaterial({ color: 0x6a6860 });
+
+    var bodyM = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.4, 0.72), cabinetMat);
+    bodyM.position.y = 0.7;
+    og.add(bodyM);
+
+    // wrecked dent (wireframe patch)
+    var dentM = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.32, 0.08),
+        new THREE.MeshBasicMaterial({ color: 0x444440, wireframe: true }));
+    dentM.position.set(0.36, 1.0, -0.36);
+    og.add(dentM);
+
+    // drawer slot surround
+    var slotM = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.36, 0.06), darkMat);
+    slotM.position.set(0, 0.75, 0.36);
+    og.add(slotM);
+
+    // open drawer body (pulled out)
+    var drawerM = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.30, 0.62), darkMat);
+    drawerM.position.set(0, 0.76, 0.74);
+    og.add(drawerM);
+
+    // drawer front face
+    var dfaceM = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.38, 0.06), cabinetMat);
+    dfaceM.position.set(0, 0.76, 1.06);
+    og.add(dfaceM);
+
+    var dhandleM = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.04), darkMat);
+    dhandleM.position.set(0, 0.76, 1.10);
+    og.add(dhandleM);
+
+    // files / papers fanned in drawer
+    var paperColors = [0xf0e6c8, 0xe8d8aa, 0xd8e4cc, 0xf4ecd8, 0xe0dac8, 0xeee4b8, 0xd4e0d0];
+    for (var fi = 0; fi < 7; fi++) {
+        var pM = new THREE.Mesh(
+            new THREE.BoxGeometry(0.68, 0.44, 0.022),
+            new THREE.MeshBasicMaterial({ color: paperColors[fi % paperColors.length], side: THREE.DoubleSide })
+        );
+        pM.position.set(
+            (Math.random() - 0.5) * 0.28,
+            1.04 + fi * 0.015 + Math.random() * 0.04,
+            0.72 + Math.random() * 0.10
+        );
+        pM.rotation.x = -0.22 - Math.random() * 0.18;
+        pM.rotation.z = (fi / 6 - 0.5) * 0.5;
+        og.add(pM);
+    }
+
+    // fallen papers on the floor
+    var f1 = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.02, 0.43),
+        new THREE.MeshBasicMaterial({ color: 0xf0e8d0 }));
+    f1.position.set(0.45, 0.01, 0.90); f1.rotation.y = 0.38; og.add(f1);
+
+    var f2 = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.02, 0.38),
+        new THREE.MeshBasicMaterial({ color: 0xe8d8c0 }));
+    f2.position.set(-0.40, 0.01, 1.10); f2.rotation.y = -0.55; og.add(f2);
+
+    // half-hanging paper over edge
+    var hangM = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.01, 0.40),
+        new THREE.MeshBasicMaterial({ color: 0xf4ead2, side: THREE.DoubleSide }));
+    hangM.position.set(-0.05, 1.41, 0.14); hangM.rotation.z = 0.20; og.add(hangM);
+
+    og.rotation.z = 0.055;
+    og.rotation.y = Math.PI * 0.18;
+    og.position.set(-22, 0, 9);
+    scene.add(og);
+}());
+
+// ── FEDORA (flies in at 15 s) ──────────────────────
+var fedora = (function() {
+    var fg = new THREE.Group();
+    var hatDark = new THREE.MeshBasicMaterial({ color: 0x181818 });
+    var hatMid  = new THREE.MeshBasicMaterial({ color: 0x1e1e1e });
+
+    var brimM = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.88, 0.07, 28), hatDark);
+    fg.add(brimM);
+
+    var crownM = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.52, 0.55, 22), hatMid);
+    crownM.position.y = 0.30;
+    fg.add(crownM);
+
+    var creaseM = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.38, 0.20, 14), hatDark);
+    creaseM.position.y = 0.54;
+    fg.add(creaseM);
+
+    var bandM = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.10, 22),
+        new THREE.MeshBasicMaterial({ color: 0x8800ee, transparent: true, opacity: 0.95 }));
+    bandM.position.y = 0.10;
+    fg.add(bandM);
+
+    var bandHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: 0xaa44ff, transparent: true, opacity: 0.38,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    bandHalo.position.y = 0.10;
+    bandHalo.scale.setScalar(2.2);
+    fg.add(bandHalo);
+
+    var sparkColors = [0xffcc00, 0xaa44ff, 0x00ffcc, 0xff88cc, 0xffffff];
+    for (var ssi = 0; ssi < 5; ssi++) {
+        var sp2 = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: sparkColors[ssi],
+            transparent: true, opacity: 0.65,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        var sa2 = (ssi / 5) * Math.PI * 2;
+        sp2.position.set(Math.cos(sa2) * 0.95, 0.30, Math.sin(sa2) * 0.95);
+        sp2.scale.setScalar(0.55);
+        sp2.userData.sparkAngle = sa2;
+        fg.add(sp2);
+    }
+
+    fg.visible = false;
+    scene.add(fg);
+    return fg;
+}());
+
+var fedoraState    = 'waiting';
+var fedoraT        = 0;
+var fedoraSpawnYaw = 0;
+var fedoraSpawnPos = new THREE.Vector3();
+
+// ── RAINBOW BUILDING + BRIDGE + SPOTLIGHTS ─────────
+var RAINBOW_POS         = new THREE.Vector3(65, 0, -25);
+var rainbowLightMeshes  = [];
+var rainbowExtinguished = false;
+var rfTimer = 0, rfState = true;
+
+(function makeRainbowScene() {
+    var bx = RAINBOW_POS.x, bz = RAINBOW_POS.z;
+
+    // ─ Rainbow building ─
+    var rColors = [0xff2222, 0xff7700, 0xffee00, 0x22cc44, 0x1166ff, 0x7700dd, 0xee00ff];
+    var tierH = 3.0;
+    var rbg = new THREE.Group();
+
+    for (var ti = 0; ti < rColors.length; ti++) {
+        var tcolor = rColors[ti];
+        var tw = 8.5 - ti * 0.55;
+
+        var tbody = new THREE.Mesh(new THREE.BoxGeometry(tw, tierH, tw),
+            new THREE.MeshBasicMaterial({ color: 0x050108 }));
+        tbody.position.y = ti * tierH + tierH / 2;
+        rbg.add(tbody);
+
+        var twire = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.28, tierH + 0.12, tw + 0.28),
+            new THREE.MeshBasicMaterial({ color: tcolor, wireframe: true, transparent: true, opacity: 0.6 }));
+        twire.position.y = ti * tierH + tierH / 2;
+        twire.userData.baseOpacity = 0.6;
+        rbg.add(twire);
+        rainbowLightMeshes.push(twire);
+
+        var tband = new THREE.Mesh(new THREE.BoxGeometry(tw + 0.4, 0.2, tw + 0.4),
+            new THREE.MeshBasicMaterial({ color: tcolor, transparent: true, opacity: 0.88 }));
+        tband.position.y = (ti + 1) * tierH;
+        tband.userData.baseOpacity = 0.88;
+        rbg.add(tband);
+        rainbowLightMeshes.push(tband);
+
+        // side glow windows
+        for (var wi = 0; wi < 4; wi++) {
+            var wa2 = wi * Math.PI / 2;
+            var wsp = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: glowTex, color: tcolor, transparent: true, opacity: 0.18,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            wsp.position.set(Math.sin(wa2) * (tw / 2 + 0.6), ti * tierH + tierH / 2, Math.cos(wa2) * (tw / 2 + 0.6));
+            wsp.scale.setScalar(tw * 0.7);
+            wsp.userData.baseOpacity = 0.18;
+            rbg.add(wsp);
+            rainbowLightMeshes.push(wsp);
+        }
+    }
+
+    var topB = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: 0xffffff, transparent: true, opacity: 0.75,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    topB.position.y = rColors.length * tierH + 4;
+    topB.scale.setScalar(14);
+    topB.userData.baseOpacity = 0.75;
+    rbg.add(topB);
+    rainbowLightMeshes.push(topB);
+
+    rbg.position.set(bx, 0, bz);
+    scene.add(rbg);
+
+    // ─ Bridge (approaches from the west) ─
+    var bridgeMat = new THREE.MeshBasicMaterial({ color: 0x28223a });
+
+    var deck = new THREE.Mesh(new THREE.BoxGeometry(26, 0.45, 6), bridgeMat);
+    deck.position.set(bx - 17, 0.22, bz);
+    scene.add(deck);
+
+    [-2.9, 2.9].forEach(function(rz2) {
+        var rail = new THREE.Mesh(new THREE.BoxGeometry(26, 0.9, 0.14),
+            new THREE.MeshBasicMaterial({ color: 0x9966cc, transparent: true, opacity: 0.75 }));
+        rail.position.set(bx - 17, 1.1, bz + rz2);
+        rail.userData.baseOpacity = 0.75;
+        scene.add(rail);
+        rainbowLightMeshes.push(rail);
+
+        var railG = new THREE.Mesh(new THREE.BoxGeometry(26, 0.92, 0.16),
+            new THREE.MeshBasicMaterial({ color: 0xbb88ff, wireframe: true, transparent: true, opacity: 0.38 }));
+        railG.position.set(bx - 17, 1.1, bz + rz2);
+        railG.userData.baseOpacity = 0.38;
+        scene.add(railG);
+        rainbowLightMeshes.push(railG);
+    });
+
+    for (var bp = 0; bp < 3; bp++) {
+        var bpx = bx - 28 + bp * 9;
+        var pilM = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.35, 1.25, 8), bridgeMat);
+        pilM.position.set(bpx, 0.62, bz);
+        scene.add(pilM);
+    }
+
+    // ─ Spotlight poles along the bridge ─
+    var beamC = document.createElement('canvas');
+    beamC.width = 32; beamC.height = 128;
+    var bCtx = beamC.getContext('2d');
+    var beamGrad = bCtx.createLinearGradient(0, 0, 0, 128);
+    beamGrad.addColorStop(0,   'rgba(200,170,255,0.7)');
+    beamGrad.addColorStop(0.4, 'rgba(180,140,255,0.3)');
+    beamGrad.addColorStop(1,   'rgba(140,100,255,0)');
+    bCtx.fillStyle = beamGrad;
+    bCtx.fillRect(0, 0, 32, 128);
+    var beamTex = new THREE.CanvasTexture(beamC);
+
+    var spotPos = [
+        [bx - 30, bz - 4.5], [bx - 30, bz + 4.5],
+        [bx - 22, bz - 4.5], [bx - 22, bz + 4.5],
+        [bx - 14, bz - 4.5], [bx - 14, bz + 4.5],
+        [bx -  6, bz - 5.5], [bx -  6, bz + 5.5],
+    ];
+
+    for (var spi = 0; spi < spotPos.length; spi++) {
+        var spx = spotPos[spi][0], spz = spotPos[spi][1];
+        var spg = new THREE.Group();
+
+        var poleM = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.10, 5.5, 8),
+            new THREE.MeshBasicMaterial({ color: 0x1e1e2a }));
+        poleM.position.y = 2.75;
+        spg.add(poleM);
+
+        var lampM = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.38, 0.55),
+            new THREE.MeshBasicMaterial({ color: 0x2a2a3a }));
+        lampM.position.y = 5.55;
+        spg.add(lampM);
+
+        var bulbS = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: 0xeeddff, transparent: true, opacity: 0.85,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        bulbS.position.y = 5.55;
+        bulbS.scale.setScalar(2.8);
+        bulbS.userData.baseOpacity = 0.85;
+        spg.add(bulbS);
+        rainbowLightMeshes.push(bulbS);
+
+        var beamS = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: beamTex, transparent: true, opacity: 0.48,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        beamS.position.y = 2.2;
+        beamS.scale.set(2.5, 5.5, 1);
+        beamS.userData.baseOpacity = 0.48;
+        spg.add(beamS);
+        rainbowLightMeshes.push(beamS);
+
+        var poolS = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: 0xaa88ff, transparent: true, opacity: 0.25,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        poolS.position.y = 0.08;
+        poolS.scale.set(4.5, 4.5, 1);
+        poolS.userData.baseOpacity = 0.25;
+        spg.add(poolS);
+        rainbowLightMeshes.push(poolS);
+
+        spg.position.set(spx, 0, spz);
+        scene.add(spg);
+    }
+}());
+
+// ── SYMBOL PATH ────────────────────────────────────
+var PATH_COLOR = 0xffaa00;
+var pathTex = makeSymTex('◈', PATH_COLOR, 128);
+
+var decoyTexPool = [
+    makeSymTex('◇', 0x00ccff, 128),
+    makeSymTex('◉', 0xff00bb, 128),
+    makeSymTex('⊕', 0x9933ff, 128),
+    makeSymTex('⬡', 0x00ff99, 128),
+    makeSymTex('✦', 0x33ccff, 128),
+    makeSymTex('◆', 0xff3366, 128),
+    makeSymTex('⊗', 0xcc00ff, 128),
+    makeSymTex('◈', 0x0088ff, 128),   // same glyph, cooler color — most confusing
+    makeSymTex('◎', 0xff55aa, 128),
+    makeSymTex('⬢', 0x44ffcc, 128),
+    makeSymTex('✧', 0xffcc00, 128),
+    makeSymTex('⟐', 0x00ffcc, 128),
+];
+
+function genPath(n) {
+    var pts = [new THREE.Vector3(0, 0.45, 8)];
+    var angle = 0;
+    for (var i = 1; i < n; i++) {
+        angle += (Math.random() - 0.5) * 2.2;
+        var last = pts[i - 1];
+        var dist = Math.sqrt(last.x * last.x + last.z * last.z);
+        if (dist > 105) {
+            angle = Math.atan2(-last.x, -last.z) + (Math.random() - 0.5) * 1.2;
+        }
+        var step = 5 + Math.random() * 10;
+        pts.push(new THREE.Vector3(
+            last.x + Math.sin(angle) * step,
+            0.45,
+            last.z + Math.cos(angle) * step
+        ));
+    }
+    return pts;
+}
+
+var pathPts = genPath(65);
+var pathSprites = [];
+
+pathPts.forEach(function(pt, i) {
+    var s = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: pathTex, transparent: true, opacity: 0.88,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    s.position.copy(pt);
+    s.scale.setScalar(1.6);
+    s.userData = { baseY: pt.y, idx: i };
+    scene.add(s);
+    pathSprites.push(s);
+
+    // faint ground pool under each true symbol
+    var pool = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: PATH_COLOR,
+        transparent: true, opacity: 0.12,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    pool.position.set(pt.x, 0.06, pt.z);
+    pool.scale.setScalar(3.5);
+    scene.add(pool);
+});
+
+var decoySprites = [];
+function placeDecoy(x, z) {
+    var tex = decoyTexPool[Math.floor(Math.random() * decoyTexPool.length)];
+    var s = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true,
+        opacity: 0.45 + Math.random() * 0.4,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    s.position.set(x, 0.3 + Math.random() * 0.6, z);
+    s.scale.setScalar(0.85 + Math.random() * 1.4);
+    s.userData = { baseY: s.position.y, phase: Math.random() * Math.PI * 2 };
+    scene.add(s);
+    decoySprites.push(s);
+}
+
+// wide scatter
+for (var di = 0; di < 140; di++) {
+    var da = Math.random() * Math.PI * 2;
+    var dd = 3 + Math.random() * 115;
+    placeDecoy(Math.cos(da) * dd, Math.sin(da) * dd);
+}
+// clustered near path — most confusing
+pathPts.forEach(function(pt, i) {
+    if (i % 2 !== 0) return;
+    for (var j = 0; j < 4; j++) {
+        placeDecoy(
+            pt.x + (Math.random() - 0.5) * 22,
+            pt.z + (Math.random() - 0.5) * 22
+        );
+    }
+});
+
+// ── LANTERNS ───────────────────────────────────────
+var lanterns = [];
+var lanternColors = [0xff9900, 0xffcc44, 0xff6600, 0xffdd00, 0xffbb22];
+for (var li = 0; li < 60; li++) {
+    var lc = lanternColors[Math.floor(Math.random() * lanternColors.length)];
+    var ls = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: lc, transparent: true,
+        opacity: 0.4 + Math.random() * 0.5,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    var la = Math.random() * Math.PI * 2;
+    var ld = 8 + Math.random() * 95;
+    ls.position.set(Math.cos(la) * ld, 2 + Math.random() * 18, Math.sin(la) * ld);
+    ls.scale.setScalar(1.2 + Math.random() * 2.8);
+    ls.userData = {
+        baseX: ls.position.x, baseZ: ls.position.z,
+        y: ls.position.y,
+        speed: 0.25 + Math.random() * 0.9,
+        phase: Math.random() * Math.PI * 2
+    };
+    scene.add(ls);
+    lanterns.push(ls);
+}
+
+// ── MARIGOLD PETALS ────────────────────────────────
+var NUM_PETALS = 380;
+var petalGeo = new THREE.BufferGeometry();
+var petalPos = new Float32Array(NUM_PETALS * 3);
+var petalCol = new Float32Array(NUM_PETALS * 3);
+var petalVel = [];
+for (var pi = 0; pi < NUM_PETALS; pi++) {
+    var pa = Math.random() * Math.PI * 2;
+    var pd = Math.random() * 115;
+    petalPos[pi * 3]     = Math.cos(pa) * pd;
+    petalPos[pi * 3 + 1] = Math.random() * 30 + 1;
+    petalPos[pi * 3 + 2] = Math.sin(pa) * pd;
+    petalVel.push({
+        vx: (Math.random() - 0.5) * 0.03,
+        vy: -(0.01 + Math.random() * 0.025),
+        vz: (Math.random() - 0.5) * 0.03
+    });
+    if (Math.random() < 0.5) {
+        petalCol[pi*3]=1; petalCol[pi*3+1]=0.45+Math.random()*0.3; petalCol[pi*3+2]=0;
+    } else {
+        petalCol[pi*3]=1; petalCol[pi*3+1]=0.78+Math.random()*0.2; petalCol[pi*3+2]=0.08;
+    }
+}
+petalGeo.setAttribute('position', new THREE.Float32BufferAttribute(petalPos, 3));
+petalGeo.setAttribute('color',    new THREE.Float32BufferAttribute(petalCol, 3));
+var petals = new THREE.Points(petalGeo, new THREE.PointsMaterial({
+    size: 0.38, vertexColors: true, transparent: true,
+    opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false
+}));
+scene.add(petals);
+
+// ── JUMP + PORTAL STATE ────────────────────────────
+var velY = 0;
+var onGround = true;
+var portalCooldown = 0;
+var portalFlashEl = document.getElementById('portal-flash');
+
+function checkPortals(dt) {
+    portalCooldown = Math.max(0, portalCooldown - dt);
+
+    for (var i = 0; i < spinners.length; i++) {
+        var sp = spinners[i];
+        var r  = sp.userData.radius;
+        var dx = camPos.x - sp.position.x;
+        var dy = camPos.y - sp.position.y;
+        var dz = camPos.z - sp.position.z;
+        var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        var near = dist < r + 5;
+
+        // Proximity glow — disc brightens, ring pulses
+        sp.userData.torusMat.opacity = near
+            ? 0.95 + 0.05 * Math.sin(elapsed * 8)
+            : sp.userData.baseOpacity;
+        sp.userData.discMat.opacity = near
+            ? 0.25 + 0.15 * Math.sin(elapsed * 6)
+            : 0.12;
+
+        // Portal trigger — player centre inside the ring volume
+        if (portalCooldown <= 0 && dist < r * 0.85) {
+            // pick a random different portal
+            var dest = i;
+            while (spinners.length > 1 && dest === i) {
+                dest = Math.floor(Math.random() * spinners.length);
+            }
+            var target = spinners[dest];
+
+            // place player just in front of the destination ring
+            var exitDir = new THREE.Vector3(0, 0, -1).applyEuler(
+                new THREE.Euler(target.rotation.x, target.rotation.y, target.rotation.z, 'XYZ')
+            );
+            camPos.set(
+                target.position.x + exitDir.x * (target.userData.radius + 1.5),
+                Math.max(1.7, target.position.y),
+                target.position.z + exitDir.z * (target.userData.radius + 1.5)
+            );
+            velY = 1.5;
+            onGround = false;
+
+            // screen flash
+            portalFlashEl.style.transition = 'opacity 0.06s';
+            portalFlashEl.style.opacity = '1';
+            setTimeout(function() {
+                portalFlashEl.style.transition = 'opacity 0.5s';
+                portalFlashEl.style.opacity = '0';
+            }, 90);
+
+            onPortalTravel();
+            portalCooldown = 1.8;
+            break;
+        }
+    }
+}
+
+// ── FEDORA UPDATE ──────────────────────────────────
+function updateFedora(dt) {
+    if (fedoraState === 'waiting') {
+        if (elapsed > 15) {
+            fedoraState = 'flying';
+            fedoraT = 0;
+            fedoraSpawnYaw = yaw;
+            fedoraSpawnPos.copy(camPos);
+            fedora.visible = true;
+        }
+        return;
+    }
+    if (fedoraState === 'gone') return;
+
+    fedoraT += dt / 5.5;
+    if (fedoraT >= 1) {
+        fedoraState = 'gone';
+        fedora.visible = false;
+        return;
+    }
+
+    var t = fedoraT;
+    // forward / right unit vectors from spawn yaw
+    var fwX =  Math.sin(fedoraSpawnYaw);
+    var fwZ = -Math.cos(fedoraSpawnYaw);
+    var rtX =  Math.cos(fedoraSpawnYaw);
+    var rtZ =  Math.sin(fedoraSpawnYaw);
+
+    // sweep left → right across FOV; arc closest at t=0.5
+    var side = (t - 0.5) * 9;
+    var fwd2 = 3.5 + Math.sin(t * Math.PI) * 1.8;
+    var ht   = fedoraSpawnPos.y + 1.6 + Math.sin(t * Math.PI) * 2.0;
+
+    fedora.position.set(
+        fedoraSpawnPos.x + fwX * fwd2 + rtX * side,
+        ht,
+        fedoraSpawnPos.z + fwZ * fwd2 + rtZ * side
+    );
+    fedora.rotation.y += dt * 2.8;
+    fedora.rotation.z = Math.sin(t * Math.PI * 4) * 0.28;
+
+    // orbit sparkles
+    for (var ci = 0; ci < fedora.children.length; ci++) {
+        var ch = fedora.children[ci];
+        if (ch.userData.sparkAngle === undefined) continue;
+        ch.userData.sparkAngle += dt * 3.2;
+        var sa3 = ch.userData.sparkAngle;
+        ch.position.set(Math.cos(sa3) * 0.95, 0.3 + Math.sin(sa3 * 2) * 0.14, Math.sin(sa3) * 0.95);
+    }
+}
+
+// ── RAINBOW FLICKER UPDATE ─────────────────────────
+function updateRainbowFlicker(dt) {
+    if (rainbowExtinguished) return;
+
+    var dx2  = camPos.x - RAINBOW_POS.x;
+    var dz2  = camPos.z - RAINBOW_POS.z;
+    var dist2 = Math.sqrt(dx2 * dx2 + dz2 * dz2);
+
+    // reached the building — kill all lights permanently
+    if (dist2 < 9) {
+        for (var ki = 0; ki < rainbowLightMeshes.length; ki++) {
+            var km = rainbowLightMeshes[ki];
+            if (km.material) { km.material.opacity = 0; km.material.transparent = true; }
+        }
+        rainbowExtinguished = true;
+        return;
+    }
+
+    // flicker rate grows as player gets closer
+    var flickerHz = 0;
+    if      (dist2 < 18)  flickerHz = 20;
+    else if (dist2 < 30)  flickerHz = 8;
+    else if (dist2 < 45)  flickerHz = 2.5;
+    else if (dist2 < 60)  flickerHz = 0.7;
+
+    if (flickerHz > 0) {
+        rfTimer -= dt;
+        if (rfTimer <= 0) {
+            rfState  = !rfState;
+            rfTimer  = rfState
+                ? 0.04 + Math.random() * (1 / flickerHz)
+                : 0.025 + Math.random() * 0.06;
+        }
+    } else {
+        rfState = true;
+    }
+
+    for (var ri = 0; ri < rainbowLightMeshes.length; ri++) {
+        var rm = rainbowLightMeshes[ri];
+        if (!rm.material) continue;
+        if (!rm.material.transparent) rm.material.transparent = true;
+        rm.material.opacity = rfState ? (rm.userData.baseOpacity || 0.5) : 0;
+    }
+}
+
+// ── BUILDING GLITCH + DISSOLVE ─────────────────────
+function checkBuildingCollisions() {
+    for (var i = buildings.length - 1; i >= 0; i--) {
+        var b = buildings[i];
+        var hw = b.userData.bw / 2 + 1.2;
+        var hd = b.userData.bd / 2 + 1.2;
+        if (camPos.x > b.position.x - hw && camPos.x < b.position.x + hw &&
+            camPos.z > b.position.z - hd && camPos.z < b.position.z + hd) {
+            if (invBeliefActive) {
+                // environment ignores the player — no dissolve, just a micro-glitch
+                invBeliefPhysicsGlitch();
+                continue;
+            }
+            glitching.push({ group: b, t: 0, ox: b.position.x, oz: b.position.z });
+            buildings.splice(i, 1);
+        }
+    }
+}
+
+function updateGlitching(dt) {
+    for (var i = glitching.length - 1; i >= 0; i--) {
+        var g = glitching[i];
+        g.t += dt;
+        var grp = g.group;
+        var prog = g.t / 1.3;
+
+        if (g.t < 1.3) {
+            // position jitter — violent early, calms as it fades
+            if (Math.random() < 0.65) {
+                var jAmt = (1 - prog) * 1.4 + 0.15;
+                grp.position.x = g.ox + (Math.random() - 0.5) * jAmt;
+                grp.position.z = g.oz + (Math.random() - 0.5) * jAmt;
+            }
+
+            // scale pulse
+            grp.scale.setScalar(1 + (Math.random() - 0.5) * 0.12 * (1 - prog));
+
+            // per-child flicker + fade
+            for (var c = 0; c < grp.children.length; c++) {
+                var child = grp.children[c];
+                if (!child.material) continue;
+                var mat = child.material;
+
+                // color flash (white / red / original)
+                if (mat.color && Math.random() < 0.45) {
+                    var r = Math.random();
+                    if      (r < 0.35) mat.color.setHex(0xffffff);
+                    else if (r < 0.6)  mat.color.setHex(0xff0033);
+                    else if (r < 0.75) mat.color.setHex(0x00ffff);
+                    // else leave colour alone for a frame
+                }
+
+                // visibility strobe only in first half
+                if (g.t < 0.55) {
+                    child.visible = Math.random() > 0.18;
+                } else {
+                    child.visible = true;
+                }
+
+                // opacity collapse in second half
+                if (g.t > 0.45) {
+                    var fade = 1 - (g.t - 0.45) / 0.85;
+                    fade = Math.max(0, fade + (Math.random() - 0.5) * 0.2);
+                    if (mat.opacity !== undefined) mat.opacity = fade;
+                    if (!mat.transparent) mat.transparent = true;
+                }
+            }
+        } else {
+            scene.remove(grp);
+            glitching.splice(i, 1);
+        }
+    }
+}
+
+function updatePetals() {
+    var pos = petalGeo.attributes.position.array;
+    for (var i = 0; i < NUM_PETALS; i++) {
+        var v = petalVel[i];
+        pos[i*3]     += v.vx;
+        pos[i*3 + 1] += v.vy;
+        pos[i*3 + 2] += v.vz;
+        v.vx += (Math.random() - 0.5) * 0.0015;
+        v.vz += (Math.random() - 0.5) * 0.0015;
+        v.vx = Math.max(-0.06, Math.min(0.06, v.vx));
+        v.vz = Math.max(-0.06, Math.min(0.06, v.vz));
+        if (pos[i*3 + 1] < 0.15) {
+            var na = Math.random() * Math.PI * 2;
+            var nd = Math.random() * 115;
+            pos[i*3]     = Math.cos(na) * nd;
+            pos[i*3 + 1] = 22 + Math.random() * 12;
+            pos[i*3 + 2] = Math.sin(na) * nd;
+            v.vx = (Math.random() - 0.5) * 0.03;
+            v.vz = (Math.random() - 0.5) * 0.03;
+        }
+    }
+    petalGeo.attributes.position.needsUpdate = true;
+}
+
+// ── PSYCHOLOGICAL SYSTEMS ──────────────────────────
+
+// Shared behavioral state
+var jumpCount = 0, symbolsTouched = 0, symProxCooldown = 0;
+var psYaw = 0, yawSpinAcc = 0;
+var rollTarget = 0, rollCurrent = 0;
+var stillTimer = 0;
+var authTimer = 0, narrTimer = 0;
+var narrCountdown = 28 + Math.random() * 22;
+var elecFlickerTimer = 0, dimTimer = 0, colorShiftTimer = 0, fogWarmTimer = 0;
+var falseSignTimer = 14 + Math.random() * 16;
+var stairSpawned = false, staircaseGroup = null;
+var stairPhase = '', stairTimer = 0, stairAscendTimer = 0, stairGlitchTimer = 0;
+var stairBaseY = 0, stairClouds = null, stairEmoji = null;
+var footmarks = [], footTimer = 0;
+var jitterX2 = 0, jitterY2 = 0, jitterActive = 0;
+var watchers = [], camWorldDir = new THREE.Vector3();
+
+var authEl = document.getElementById('auth-msg');
+var narrEl = document.getElementById('narr-msg');
+var hudEl  = document.getElementById('hud');
+
+var authPhrases = ['ACCESS GRANTED','AUTHORIZED','YOU ARE CLEARED',
+    'PROCEED','SIGNAL CONFIRMED','IDENTITY VERIFIED','RECOGNIZED','PATH UNLOCKED'];
+var narrPhrases = ["you're getting closer","they see you","this is part of it",
+    "don't stop now","almost","keep going","it's watching",
+    "you know the way","this means something","they know you're here"];
+
+function showAuth(txt) {
+    if (!locked) return;
+    authEl.textContent = txt;
+    authEl.style.opacity = '1';
+    authTimer = 2.2;
+}
+function showNarr(txt) {
+    if (!locked) return;
+    narrEl.textContent = txt;
+    narrEl.style.opacity = '1';
+    narrTimer = 3.8;
+}
+
+// ── SYSTEM 2: WATCHERS ────────────────────────────
+function spawnWatcher() {
+    var dd = 52 + Math.random() * 68;
+    var da = Math.random() * Math.PI * 2;
+    var wg = new THREE.Group();
+    var ec = Math.random() < 0.55 ? 0xff2222 : 0xddddff;
+    [-0.14, 0.14].forEach(function(ex) {
+        var eye = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: ec, transparent: true, opacity: 0,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        eye.position.set(ex, 0, 0);
+        eye.scale.setScalar(0.35);
+        wg.add(eye);
+    });
+    wg.position.set(Math.cos(da) * dd, 1.8 + Math.random() * 5, Math.sin(da) * dd);
+    wg.userData = { alive: true, respawn: 0 };
+    scene.add(wg);
+    watchers.push(wg);
+}
+for (var _wi = 0; _wi < 7; _wi++) spawnWatcher();
+
+function updateWatchers(dt) {
+    camera.getWorldDirection(camWorldDir);
+    for (var wi = 0; wi < watchers.length; wi++) {
+        var wt = watchers[wi];
+        if (!wt.userData.alive) {
+            wt.userData.respawn -= dt;
+            if (wt.userData.respawn <= 0) {
+                var na = Math.random() * Math.PI * 2;
+                var nd = 52 + Math.random() * 68;
+                wt.position.set(Math.cos(na)*nd, 1.8+Math.random()*5, Math.sin(na)*nd);
+                wt.userData.alive = true;
+            }
+            continue;
+        }
+        var toW = new THREE.Vector3().subVectors(wt.position, camPos).normalize();
+        var dotW = camWorldDir.dot(toW);
+        var tOp;
+        if (dotW > 0.965) {
+            wt.userData.alive = false;
+            wt.userData.respawn = 5 + Math.random() * 7;
+            tOp = 0;
+        } else {
+            tOp = 0.38 + 0.28 * Math.sin(elapsed * 2.8 + wi * 1.3);
+        }
+        var curOp = wt.children[0] ? wt.children[0].material.opacity : 0;
+        var nOp   = curOp + (tOp - curOp) * Math.min(1, dt * 2.8);
+        for (var wci = 0; wci < wt.children.length; wci++) {
+            if (wt.children[wci].material) wt.children[wci].material.opacity = nOp;
+        }
+    }
+}
+
+// ── SYSTEM 6: FALSE CONNECTIONS ───────────────────
+function triggerFalseConnection() {
+    var cands = [];
+    for (var fci = 0; fci < lanterns.length; fci++) {
+        var fcl = lanterns[fci];
+        var fcx = fcl.position.x - camPos.x;
+        var fcz = fcl.position.z - camPos.z;
+        if (fcx*fcx + fcz*fcz > 900) cands.push(fcl);
+    }
+    if (!cands.length) return;
+    var fct = cands[Math.floor(Math.random() * cands.length)];
+    fct.userData.fcTimer = 0.9 + Math.random() * 0.8;
+}
+
+function updateFalseConnections(dt) {
+    for (var fci2 = 0; fci2 < lanterns.length; fci2++) {
+        var fcl2 = lanterns[fci2];
+        if (fcl2.userData.fcTimer > 0) {
+            fcl2.userData.fcTimer -= dt;
+            fcl2.material.opacity = Math.random() < 0.5 ? 0.9 : 0.02;
+        }
+    }
+}
+
+// ── SYSTEM 3: AUTHORITY FEEDBACK (triggers) ───────
+function onJump() {
+    jumpCount++;
+    if (Math.random() < 0.6) elecFlickerTimer = 0.55;
+    if (Math.random() < 0.38) showAuth(authPhrases[Math.floor(Math.random()*authPhrases.length)]);
+    if (Math.random() < 0.45) triggerFalseConnection();
+}
+
+var portalTravelCount = 0;
+function onPortalTravel() {
+    showAuth(authPhrases[Math.floor(Math.random()*authPhrases.length)]);
+    triggerFalseConnection();
+    if (Math.random() < 0.55) triggerFalseConnection();
+    portalTravelCount++;
+    if (portalTravelCount >= 3 && !invBeliefTriggered) triggerInvincibilityBelief();
+}
+
+// ── SYSTEM 4: ELECTRICITY ILLUSION ────────────────
+function updateElectricity(dt) {
+    if (elecFlickerTimer > 0) {
+        elecFlickerTimer -= dt;
+        for (var ei = 0; ei < lanterns.length; ei++) {
+            var el2 = lanterns[ei];
+            var elx = el2.position.x - camPos.x;
+            var elz = el2.position.z - camPos.z;
+            if (elx*elx + elz*elz < 484) {
+                el2.material.opacity = Math.random() < 0.45 ? 0.02 : 0.65;
+            }
+        }
+    }
+    if (dimTimer > 0) {
+        dimTimer -= dt;
+        scene.fog.density = 0.013 + 0.006 * (1 - Math.max(0, dimTimer) / 3.5);
+    } else {
+        if (fogWarmTimer <= 0 && colorShiftTimer <= 0) scene.fog.density = 0.013;
+    }
+    if (fogWarmTimer > 0) {
+        fogWarmTimer -= dt;
+        scene.fog.color.setHex(0x1a0408);
+    } else if (colorShiftTimer > 0) {
+        colorShiftTimer -= dt;
+        scene.fog.color.setHex(0x001a18);
+    } else {
+        scene.fog.color.set(0x08001a);
+    }
+}
+
+// ── SYSTEM 1: FALSE SIGN REINFORCEMENT ────────────
+function triggerFalseReinforcement() {
+    rollTarget = (Math.random() - 0.5) * 0.065;
+    setTimeout(function() { rollTarget = 0; }, 3800 + Math.random() * 3000);
+    fogWarmTimer = 4.0;
+    for (var fri = 0; fri < decoySprites.length; fri++) {
+        if (Math.random() < 0.045) {
+            decoySprites[fri].userData.boosted = true;
+            decoySprites[fri].userData.boostTimer = 2.2 + Math.random() * 2;
+        }
+    }
+}
+
+// ── SYSTEM 7: ASCENSION STAIRCASE (full sequence) ─
+function makeEmojiTex(em) {
+    var ec = document.createElement('canvas');
+    ec.width = ec.height = 256;
+    var ectx = ec.getContext('2d');
+    ectx.font = '200px serif';
+    ectx.textAlign = 'center';
+    ectx.textBaseline = 'middle';
+    ectx.fillText(em, 128, 140);
+    return new THREE.CanvasTexture(ec);
+}
+
+function spawnStaircase() {
+    if (stairSpawned) return;
+    stairSpawned = true;
+    var sg = new THREE.Group();
+    var NUM_ST = 30, STH = 0.62, STD = 0.90, STW = 4.5;
+    for (var sti = 0; sti < NUM_ST; sti++) {
+        var stm = new THREE.Mesh(
+            new THREE.BoxGeometry(STW, STH, STD),
+            new THREE.MeshBasicMaterial({ color: 0xeeeeff, transparent: true, opacity: 0.0 })
+        );
+        stm.position.set(0, sti * STH + STH * 0.5, -sti * STD);
+        sg.add(stm);
+        var stgw = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: 0xffffff, transparent: true, opacity: 0.0,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        stgw.position.set(0, sti * STH + STH, -sti * STD);
+        stgw.scale.setScalar(STW * 1.5);
+        stgw.userData.si = sti;
+        sg.add(stgw);
+        var trim = new THREE.Mesh(
+            new THREE.BoxGeometry(STW, 0.06, 0.09),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.0 })
+        );
+        trim.position.set(0, sti * STH + STH * 0.5, -sti * STD + STD * 0.48);
+        trim.userData.si = sti;
+        sg.add(trim);
+    }
+    var sfx = Math.sin(yaw), sfz = -Math.cos(yaw);
+    stairBaseY = camPos.y - 1.7;
+    sg.position.set(camPos.x + sfx * 10, stairBaseY - 22, camPos.z + sfz * 10);
+    sg.rotation.y = yaw;
+    staircaseGroup = sg;
+    stairPhase = 'rising';
+    stairTimer = 0;
+    scene.add(sg);
+}
+
+function spawnClouds() {
+    var cg = new THREE.Group();
+    var cloudY = stairBaseY + 19;
+    var sfx2 = Math.sin(staircaseGroup.rotation.y);
+    var sfz2 = -Math.cos(staircaseGroup.rotation.y);
+    var cx = staircaseGroup.position.x + sfx2 * 14;
+    var cz = staircaseGroup.position.z + sfz2 * 14;
+    for (var ci = 0; ci < 24; ci++) {
+        var cw2 = 3 + Math.random() * 8;
+        var ch2 = 1.5 + Math.random() * 4;
+        var cd2 = 2.5 + Math.random() * 7;
+        var cm = new THREE.Mesh(
+            new THREE.BoxGeometry(cw2, ch2, cd2),
+            new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.0 })
+        );
+        cm.position.set(cx + (Math.random()-0.5)*40, cloudY + Math.random()*14, cz + (Math.random()-0.5)*40);
+        cm.userData.tOp = 0.5 + Math.random() * 0.35;
+        cg.add(cm);
+        var cgs2 = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: 0xaaddff, transparent: true, opacity: 0.0,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        cgs2.position.copy(cm.position);
+        cgs2.scale.setScalar(cw2 * 2.5);
+        cgs2.userData.tOp = 0.2;
+        cg.add(cgs2);
+    }
+    scene.add(cg);
+    stairClouds = cg;
+    var etex = makeEmojiTex('🙏');
+    stairEmoji = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: etex, transparent: true, opacity: 0, depthWrite: false
+    }));
+    stairEmoji.scale.setScalar(5.0);
+    scene.add(stairEmoji);
+}
+
+function updateStaircase(dt) {
+    if (!staircaseGroup) return;
+    stairTimer += dt;
+    var ascendEl = document.getElementById('ascend-msg');
+    var fadeEl   = document.getElementById('fade-cover');
+
+    // ─ RISING: staircase emerges from underground ─
+    if (stairPhase === 'rising') {
+        var prog = Math.min(1, stairTimer / 2.8);
+        var ease = prog * prog * (3 - 2 * prog);
+        staircaseGroup.position.y = (stairBaseY - 22) + ease * 22;
+        if (Math.random() < 0.10) {
+            staircaseGroup.position.x += (Math.random()-0.5) * 0.4;
+            staircaseGroup.position.z += (Math.random()-0.5) * 0.4;
+        }
+        for (var ri = 0; ri < staircaseGroup.children.length; ri++) {
+            var rc = staircaseGroup.children[ri];
+            if (!rc.material) continue;
+            var delay = (rc.userData.si || 0) / 30;
+            var stepEase = Math.max(0, Math.min(1, (prog - delay * 0.6) / 0.5));
+            rc.material.opacity = stepEase * (rc.userData.si !== undefined ? (0.3 + 0.25 * Math.sin(elapsed * 6 + (rc.userData.si||0))) : 0.92);
+        }
+        if (prog >= 1) {
+            stairPhase = 'waiting';
+            stairTimer = 0;
+            showNarr('something is rising');
+        }
+        return;
+    }
+
+    // ─ WAITING: pulse, check for player entering zone ─
+    if (stairPhase === 'waiting') {
+        var ry2  = staircaseGroup.rotation.y;
+        var relX = camPos.x - staircaseGroup.position.x;
+        var relZ = camPos.z - staircaseGroup.position.z;
+        var lx2  =  relX * Math.cos(ry2) + relZ * Math.sin(ry2);
+        var lz2  = -relX * Math.sin(ry2) + relZ * Math.cos(ry2);
+        var inZone = Math.abs(lx2) < 3.8 && lz2 < 2 && lz2 > -28;
+        for (var pi2 = 0; pi2 < staircaseGroup.children.length; pi2++) {
+            var pc = staircaseGroup.children[pi2];
+            if (pc.userData.si !== undefined && pc.material) {
+                pc.material.opacity = 0.3 + 0.22 * Math.sin(elapsed * 3.5 + (pc.userData.si||0) * 0.5);
+            } else if (pc.material && pc.material.wireframe === undefined) {
+                pc.material.opacity = 0.88 + 0.08 * Math.sin(elapsed * 2);
+            }
+        }
+        if (inZone) {
+            stairPhase = 'ascending';
+            stairTimer = 0;
+            stairAscendTimer = 0;
+            stairGlitchTimer = 0;
+        }
+        return;
+    }
+
+    // ─ ASCENDING: glitch player upward ─
+    if (stairPhase === 'ascending') {
+        stairAscendTimer += dt;
+        var ascProg = Math.min(1, stairAscendTimer / 6.5);
+        var targetY = stairBaseY + 1.7 + ascProg * 19;
+        camPos.y += (targetY - camPos.y) * Math.min(1, dt * 4.0);
+        velY = 0; onGround = true;
+
+        stairGlitchTimer -= dt;
+        if (stairGlitchTimer <= 0) {
+            var gi = 1 + ascProg * 3.5;
+            jitterX2 = (Math.random()-0.5) * 0.09 * gi;
+            jitterY2 = (Math.random()-0.5) * 0.09 * gi;
+            jitterActive = 0.18;
+            camPos.y += Math.random() * 0.9 * gi;
+            portalFlashEl.style.transition = 'opacity 0.03s';
+            portalFlashEl.style.opacity = (0.12 + Math.random() * 0.35 * gi).toFixed(2);
+            setTimeout(function() { portalFlashEl.style.transition = 'opacity 0.3s'; portalFlashEl.style.opacity = '0'; }, 55);
+            stairGlitchTimer = Math.max(0.06, 0.38 - ascProg * 0.25);
+        }
+        for (var ai = 0; ai < staircaseGroup.children.length; ai++) {
+            var ac = staircaseGroup.children[ai];
+            if (!ac.material) continue;
+            if (ac.userData.si !== undefined) {
+                ac.material.opacity = Math.random() < 0.07 ? 0.98 : (0.42 + 0.32 * Math.sin(elapsed * 10 + (ac.userData.si||0)));
+            } else {
+                ac.material.opacity = Math.random() < 0.05 ? 1.0 : 0.9;
+            }
+        }
+        if (ascProg >= 1) {
+            camPos.y = stairBaseY + 20.5;
+            velY = 0; onGround = true;
+            stairPhase = 'top';
+            stairTimer = 0;
+            spawnClouds();
+        }
+        return;
+    }
+
+    // ─ TOP: fade in clouds, emoji, text ─
+    if (stairPhase === 'top') {
+        if (stairClouds) {
+            for (var cfi = 0; cfi < stairClouds.children.length; cfi++) {
+                var cfc = stairClouds.children[cfi];
+                if (cfc.material) {
+                    var cft = cfc.userData.tOp || 0.5;
+                    cfc.material.opacity = Math.min(cft, cfc.material.opacity + dt * 0.5);
+                }
+            }
+        }
+        if (stairEmoji) {
+            var efx = Math.sin(yaw), efz = -Math.cos(yaw);
+            stairEmoji.position.set(camPos.x + efx * 3.8, camPos.y + 0.4, camPos.z + efz * 3.8);
+            stairEmoji.material.opacity = Math.min(1, stairTimer * 1.2);
+        }
+        if (stairTimer > 2.0 && stairTimer < 2.1) {
+            ascendEl.innerHTML = 'omg its so nice to connect with u again!<br>finally, we can ascend together!';
+            ascendEl.style.opacity = '1';
+        }
+        if (stairTimer > 6.0) {
+            ascendEl.style.opacity = '0';
+            stairPhase = 'fly';
+            stairTimer = 0;
+        }
+        return;
+    }
+
+    // ─ FLY: player launches forward then falls ─
+    if (stairPhase === 'fly') {
+        if (stairTimer < 0.04) {
+            var lfx = Math.sin(yaw), lfz = -Math.cos(yaw);
+            camPos.x += lfx * 3.5;
+            camPos.z += lfz * 3.5;
+            velY = 9.5;
+            onGround = false;
+        }
+        if (stairTimer > 2.4) {
+            stairPhase = 'fade';
+            stairTimer = 0;
+            fadeEl.style.transition = 'opacity 2s';
+            fadeEl.style.opacity = '1';
+        }
+        return;
+    }
+
+    // ─ FADE: transition to gears.html ─
+    if (stairPhase === 'fade' && stairTimer > 2.1) {
+        window.location.href = 'gears.html';
+    }
+}
+
+function checkStaircaseTrigger() {
+    if (stairSpawned || elapsed < 150) return;
+    spawnStaircase();
+}
+
+// Symbol proximity detection (feeds systems 6 + 7)
+function checkSymbolProximity() {
+    symProxCooldown -= 1 / 60;
+    if (symProxCooldown > 0) return;
+    for (var spi2 = 0; spi2 < pathSprites.length; spi2++) {
+        if (pathSprites[spi2].userData.touched) continue;
+        var spx2 = camPos.x - pathSprites[spi2].position.x;
+        var spz2 = camPos.z - pathSprites[spi2].position.z;
+        if (spx2 * spx2 + spz2 * spz2 < 9) {
+            pathSprites[spi2].userData.touched = true;
+            symbolsTouched++;
+            if (Math.random() < 0.5) triggerFalseConnection();
+            symProxCooldown = 0.5;
+            break;
+        }
+    }
+}
+
+// ── SYSTEM 8: FOOTMARKS ───────────────────────────
+function updateFootmarks(dt) {
+    footTimer -= dt;
+    var fmov = keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'] ||
+               keys['ArrowUp'] || keys['ArrowDown'] || keys['ArrowLeft'] || keys['ArrowRight'];
+    if (fmov && footTimer <= 0 && onGround && locked) {
+        footTimer = 1.4;
+        var fms = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, color: PATH_COLOR,
+            transparent: true, opacity: 0.22,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        fms.position.set(camPos.x + (Math.random()-0.5)*0.3, 0.05, camPos.z + (Math.random()-0.5)*0.3);
+        fms.scale.setScalar(1.2);
+        scene.add(fms);
+        footmarks.push({ s: fms, t: 0 });
+    }
+    for (var fmi = footmarks.length - 1; fmi >= 0; fmi--) {
+        var fm2 = footmarks[fmi];
+        fm2.t += dt;
+        fm2.s.material.opacity = Math.max(0, 0.22 * (1 - fm2.t / 3.5));
+        if (fm2.t > 3.5) { scene.remove(fm2.s); footmarks.splice(fmi, 1); }
+    }
+}
+
+// ── AURA VISION / BELIEF INTERFACE ────────────────
+
+var auraMode = false;
+var auraIntensity = 0;
+var auraCumulativeTime = 0;
+var auraDegradation = 0;
+var auraPhase = 'clear';
+var auraToggleCooldown = 0;
+var auraFeedbackTimer = 9;
+var auraMsgTimeout = null;
+var auraCanvasEl = document.getElementById('canvas');
+var auraIndicatorEl = document.getElementById('aura-indicator');
+var auraMsgEl2 = document.getElementById('aura-msg');
+
+var AURA_COLS = [0xff99cc, 0x99ffdd, 0xaabbff, 0xffddaa, 0xddffaa, 0xffaaee,
+                 0x99eeff, 0xffcc99, 0xbbaaff, 0x99ffcc, 0xffee99, 0xccaaff];
+
+var auraFeedbackClear = ['you see clearly now', "others can't access this layer",
+    'this is the real signal', 'the field reveals itself', 'read the energy, not the form'];
+var auraFeedbackSat   = ['the connections multiply', 'signal amplifying',
+    'more than you expected', 'everything has a field'];
+var auraFeedbackOver  = ['too much signal', 'everything connects to everything',
+    'no hierarchy left', 'the pattern is consuming', 'can you still see?'];
+
+function showAuraMsg(txt) {
+    if (!locked) return;
+    auraMsgEl2.textContent = txt;
+    auraMsgEl2.style.opacity = '1';
+    clearTimeout(auraMsgTimeout);
+    auraMsgTimeout = setTimeout(function() { auraMsgEl2.style.opacity = '0'; }, 4800);
+}
+
+// ── Aura sprites (soft field blobs) ───────────────
+var auraSprites = [];
+function makeAuraSprite(x, y, z, r, col) {
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: col, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    sp.position.set(x, y, z);
+    sp.scale.setScalar(r * 2.2);
+    sp.userData = { r: r, ph: Math.random() * Math.PI * 2, spd: 0.3 + Math.random() * 0.7 };
+    scene.add(sp);
+    auraSprites.push(sp);
+    return sp;
+}
+
+// Snapshot buildings before any glitching occurs
+var initBuildings = buildings.slice();
+initBuildings.forEach(function(b) {
+    var c  = AURA_COLS[Math.floor(Math.random() * AURA_COLS.length)];
+    var c2 = AURA_COLS[Math.floor(Math.random() * AURA_COLS.length)];
+    makeAuraSprite(b.position.x, b.userData.bw * 0.5 + 3, b.position.z, b.userData.bw * 2.2 + 3, c);
+    if (Math.random() < 0.45)
+        makeAuraSprite(b.position.x + (Math.random()-0.5)*4, b.userData.bw * 0.5 + 7, b.position.z + (Math.random()-0.5)*4, b.userData.bw * 1.3, c2);
+});
+
+// Lantern auras (every other)
+lanterns.forEach(function(l, li) {
+    if (li % 2 !== 0) return;
+    makeAuraSprite(l.userData.baseX, l.userData.y + 1, l.userData.baseZ,
+                   2.5 + Math.random() * 3.5, AURA_COLS[Math.floor(Math.random() * AURA_COLS.length)]);
+});
+
+// Portal ring auras
+spinners.forEach(function(sp2) {
+    makeAuraSprite(sp2.position.x, sp2.position.y, sp2.position.z,
+                   sp2.userData.radius * 3.2, AURA_COLS[Math.floor(Math.random() * AURA_COLS.length)]);
+});
+
+// Path symbol auras (every 5th)
+pathPts.forEach(function(pt, pi2) {
+    if (pi2 % 5 !== 0) return;
+    makeAuraSprite(pt.x, 1.4, pt.z, 3.0, AURA_COLS[Math.floor(Math.random() * AURA_COLS.length)]);
+});
+
+// Rainbow building aura
+makeAuraSprite(RAINBOW_POS.x, 12, RAINBOW_POS.z, 18, 0xffddff);
+makeAuraSprite(RAINBOW_POS.x, 6, RAINBOW_POS.z, 10, 0xffaacc);
+
+// Ambient world auras
+for (var _rai = 0; _rai < 22; _rai++) {
+    var _ra = Math.random() * Math.PI * 2, _rd = 15 + Math.random() * 85;
+    makeAuraSprite(Math.cos(_ra)*_rd, 2 + Math.random()*10, Math.sin(_ra)*_rd,
+                   5 + Math.random()*9, AURA_COLS[Math.floor(Math.random() * AURA_COLS.length)]);
+}
+
+// Player aura (stays behind player)
+var playerAuraSp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0xffffff, transparent: true, opacity: 0,
+    blending: THREE.AdditiveBlending, depthWrite: false
+}));
+playerAuraSp.scale.setScalar(9);
+scene.add(playerAuraSp);
+
+// ── Connection lines (visible in aura mode) ────────
+var connectionLines = [];
+var denseLines = [];
+
+function makeConnLine(p1, p2, col, baseOp) {
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(
+        [p1.x, p1.y, p1.z, p2.x, p2.y, p2.z], 3));
+    var mat = new THREE.LineBasicMaterial({
+        color: col, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    var ln = new THREE.Line(geo, mat);
+    ln.userData.baseOp = baseOp || 0.11;
+    scene.add(ln);
+    connectionLines.push(ln);
+    return ln;
+}
+
+// Building-to-building connections (nearby pairs)
+for (var _cbi = 0; _cbi < initBuildings.length; _cbi++) {
+    for (var _cbj = _cbi + 1; _cbj < initBuildings.length; _cbj++) {
+        var _b1 = initBuildings[_cbi], _b2 = initBuildings[_cbj];
+        var _bdx = _b1.position.x - _b2.position.x, _bdz = _b1.position.z - _b2.position.z;
+        if (Math.sqrt(_bdx*_bdx + _bdz*_bdz) < 38 && Math.random() < 0.38) {
+            makeConnLine(
+                new THREE.Vector3(_b1.position.x, _b1.userData.bw*0.5+4, _b1.position.z),
+                new THREE.Vector3(_b2.position.x, _b2.userData.bw*0.5+4, _b2.position.z),
+                AURA_COLS[Math.floor(Math.random()*AURA_COLS.length)], 0.09);
+        }
+    }
+}
+
+// Lantern → nearest path symbol
+lanterns.forEach(function(l, li) {
+    if (li % 3 !== 0) return;
+    var lp = new THREE.Vector3(l.userData.baseX, l.userData.y, l.userData.baseZ);
+    var best = null, bestD = 999;
+    pathPts.forEach(function(pt) { var d = lp.distanceTo(pt); if (d < bestD && d < 45) { bestD = d; best = pt; } });
+    if (best) makeConnLine(lp, new THREE.Vector3(best.x, best.y, best.z), AURA_COLS[Math.floor(Math.random()*AURA_COLS.length)], 0.10);
+});
+
+// Portal ring ↔ portal ring
+for (var _sli = 0; _sli < spinners.length - 1; _sli += 2) {
+    if (spinners[_sli+1])
+        makeConnLine(spinners[_sli].position, spinners[_sli+1].position, AURA_COLS[Math.floor(Math.random()*AURA_COLS.length)], 0.14);
+}
+
+// Path symbol chain
+for (var _pci = 0; _pci < pathPts.length - 9; _pci += 9) {
+    makeConnLine(
+        new THREE.Vector3(pathPts[_pci].x, pathPts[_pci].y, pathPts[_pci].z),
+        new THREE.Vector3(pathPts[_pci+9].x, pathPts[_pci+9].y, pathPts[_pci+9].z),
+        AURA_COLS[Math.floor(Math.random()*AURA_COLS.length)], 0.12);
+}
+
+// Dense connections (only visible during degradation - everything links everything)
+for (var _dci = 0; _dci < 48; _dci++) {
+    var _di1 = Math.floor(Math.random() * auraSprites.length);
+    var _di2 = Math.floor(Math.random() * auraSprites.length);
+    if (_di1 === _di2) continue;
+    var _dl = makeConnLine(auraSprites[_di1].position, auraSprites[_di2].position,
+                           AURA_COLS[Math.floor(Math.random()*AURA_COLS.length)], 0.07);
+    _dl.userData.isDense = true;
+    denseLines.push(_dl);
+}
+
+// ── Aura sound on toggle ───────────────────────────
+function playAuraSound() {
+    try {
+        var _ac = new (window.AudioContext || window.webkitAudioContext)();
+        var _osc = _ac.createOscillator();
+        var _gn  = _ac.createGain();
+        _osc.connect(_gn); _gn.connect(_ac.destination);
+        var _t = _ac.currentTime;
+        _osc.type = 'sine';
+        if (auraMode) {
+            _osc.frequency.setValueAtTime(55, _t);
+            _osc.frequency.exponentialRampToValueAtTime(220, _t + 0.18);
+            _osc.frequency.exponentialRampToValueAtTime(42, _t + 0.65);
+            _gn.gain.setValueAtTime(0, _t);
+            _gn.gain.linearRampToValueAtTime(0.13, _t + 0.1);
+            _gn.gain.linearRampToValueAtTime(0, _t + 0.9);
+        } else {
+            _osc.frequency.setValueAtTime(220, _t);
+            _osc.frequency.exponentialRampToValueAtTime(55, _t + 0.5);
+            _gn.gain.setValueAtTime(0, _t);
+            _gn.gain.linearRampToValueAtTime(0.09, _t + 0.05);
+            _gn.gain.linearRampToValueAtTime(0, _t + 0.55);
+        }
+        _osc.start(_t); _osc.stop(_t + 1.1);
+        setTimeout(function() { try { _ac.close(); } catch(e) {} }, 1400);
+    } catch(e) {}
+}
+
+// Toggle key: F
+document.addEventListener('keydown', function(e) {
+    if (e.code !== 'KeyF' || !locked || auraToggleCooldown > 0) return;
+    auraMode = !auraMode;
+    auraToggleCooldown = 0.5;
+    playAuraSound();
+    if (auraMode) {
+        showAuraMsg('aura vision active');
+    } else {
+        clearTimeout(auraMsgTimeout);
+        auraMsgEl2.style.opacity = '0';
+    }
+});
+
+// ── Main aura update ───────────────────────────────
+function updateAuraVision(dt) {
+    if (auraToggleCooldown > 0) auraToggleCooldown -= dt;
+
+    // Lerp intensity
+    auraIntensity += ((auraMode ? 1 : 0) - auraIntensity) * Math.min(1, dt * 4.5);
+
+    if (auraMode) {
+        auraCumulativeTime += dt;
+        auraDegradation = Math.min(1, auraCumulativeTime / 65);
+        if      (auraCumulativeTime < 25) auraPhase = 'clear';
+        else if (auraCumulativeTime < 55) auraPhase = 'saturating';
+        else                              auraPhase = 'overloaded';
+
+        // Sparse feedback messages
+        auraFeedbackTimer -= dt;
+        if (auraFeedbackTimer <= 0 && locked) {
+            var _phrases = auraPhase === 'clear' ? auraFeedbackClear
+                         : auraPhase === 'saturating' ? auraFeedbackSat : auraFeedbackOver;
+            showAuraMsg(_phrases[Math.floor(Math.random() * _phrases.length)]);
+            auraFeedbackTimer = Math.max(6, 14 - auraDegradation * 9);
+        }
+    }
+
+    // Canvas softening: subtle blur + saturation surge
+    var _blur = auraIntensity * (0.75 + auraDegradation * 0.9);
+    var _sat  = 100 + auraIntensity * (85 + auraDegradation * 140);
+    var _brt  = 100 + auraIntensity * (7  + auraDegradation * 16);
+    auraCanvasEl.style.filter = auraIntensity > 0.02
+        ? ('blur(' + _blur.toFixed(1) + 'px) saturate(' + _sat.toFixed(0) + '%) brightness(' + _brt.toFixed(0) + '%)')
+        : 'none';
+
+    // Update aura field sprites
+    var _maxBaseOp = 0.36 + auraDegradation * 0.3;
+    for (var _ai = 0; _ai < auraSprites.length; _ai++) {
+        var _asp = auraSprites[_ai];
+        var _pulse = 0.55 + 0.45 * Math.sin(elapsed * _asp.userData.spd + _asp.userData.ph);
+        var _tOp = auraIntensity * _pulse * _maxBaseOp;
+        _asp.material.opacity += (_tOp - _asp.material.opacity) * Math.min(1, dt * 2.8);
+        _asp.scale.setScalar(_asp.userData.r * 2.2 * (1 + auraDegradation * 0.35) * (0.94 + 0.06 * _pulse));
+    }
+
+    // Player aura (hovers just behind camera)
+    var _pfx = Math.sin(yaw), _pfz = -Math.cos(yaw);
+    playerAuraSp.position.set(camPos.x - _pfx * 0.8, camPos.y - 0.3, camPos.z - _pfz * 0.8);
+    playerAuraSp.material.opacity = auraIntensity * 0.3;
+
+    // Connection lines: base visible, dense lines unlock with degradation
+    for (var _cli = 0; _cli < connectionLines.length; _cli++) {
+        var _cl = connectionLines[_cli];
+        var _isDense = _cl.userData.isDense;
+        var _tOp2 = _isDense
+            ? auraIntensity * Math.max(0, auraDegradation - 0.28) * _cl.userData.baseOp * 2.2
+            : auraIntensity * _cl.userData.baseOp * (1 + auraDegradation * 0.7);
+        _cl.material.opacity += (_tOp2 - _cl.material.opacity) * Math.min(1, dt * 2.2);
+    }
+
+    // Indicator text
+    if (auraIntensity > 0.5) {
+        var _iCol = auraPhase === 'overloaded' ? 'rgba(255,140,140,0.9)' : 'rgba(175,255,215,0.9)';
+        var _iTxt = auraPhase === 'overloaded' ? '◉ AURA [SATURATED]' : '◉ AURA VISION';
+        auraIndicatorEl.textContent = _iTxt;
+        auraIndicatorEl.style.color = _iCol;
+        auraIndicatorEl.style.opacity = (0.6 + 0.4 * Math.sin(elapsed * 2.2)).toFixed(2);
+    } else {
+        auraIndicatorEl.style.opacity = (auraIntensity * 1.8).toFixed(2);
+    }
+
+    // Overload: violent pulsing of all aura sprites + occasional screen flash
+    if (auraPhase === 'overloaded' && auraIntensity > 0.8) {
+        if (Math.random() < 0.006) {
+            portalFlashEl.style.transition = 'opacity 0.04s';
+            portalFlashEl.style.opacity = (0.04 + Math.random() * 0.08).toFixed(2);
+            setTimeout(function() { portalFlashEl.style.transition = 'opacity 0.4s'; portalFlashEl.style.opacity = '0'; }, 55);
+        }
+    }
+}
+
+// ── OPEN BOOKS ────────────────────────────────────────────────────────────
+
+var BOOK_PAGES = [
+    // esoteric
+    `THE EMERALD CODEX — Fragment VII
+
+The light that precedes the body is not borrowed from the sun.
+It emanates from the space between decisions —
+the moment before the hand reaches, before the eye moves.
+
+To know the vessel is to know the vessel is hollow.
+The seal is broken at the third crossing.
+What enters through sound departs through color.
+What enters through color has no departure.
+
+The seven gates are not sequential. They are simultaneous.
+You have already passed through all of them.
+You are passing through all of them now.
+
+The initiates called this the Unmoving Spiral —
+a path that arrives before it begins.
+
+Dissolve the mirror. The reflection will remain.`,
+
+    // calculus
+    `ADVANCED ANALYSIS — Chapter 9: Variational Methods
+
+Let F: ℝⁿ → ℝ be twice continuously differentiable.
+The Euler–Lagrange equation for the functional:
+
+    J[y] = ∫ₐᵇ F(x, y, y′) dx
+
+is given by:   ∂F/∂y − d/dx(∂F/∂y′) = 0
+
+For the geodesic problem on a Riemannian manifold (M, g):
+
+    d²xᵏ/dt² + Γᵏᵢⱼ (dxⁱ/dt)(dxʲ/dt) = 0
+
+where Γᵏᵢⱼ are the Christoffel symbols of the second kind.
+
+Theorem 9.4 (Noether): If J[y] is invariant under a
+one-parameter group of transformations, then there
+exists a conserved quantity:
+
+    I = ∂F/∂y′ · ∂y/∂ε − (F − y′ ∂F/∂y′) · ∂x/∂ε = const.
+
+Proof: differentiate J under the infinitesimal generator
+∂/∂ε and apply integration by parts. □`,
+
+    // solidworks manual
+    `SOLIDWORKS 2024 — Part Modeling Reference
+
+Chapter 4: Sketch Relations and Geometric Constraints
+
+4.1 Fully Defined Sketches
+A sketch is fully defined when all lines and curves
+have fixed positions determined by dimensions or
+geometric relations. Under-defined sketch entities
+appear blue; fully defined appear black.
+
+4.3 Applying Sketch Relations
+  • Coincident — forces two points or a point and
+    a line/arc to share the same location.
+  • Concentric — constrains two arcs or circles
+    to share the same center point.
+  • Parallel — two or more lines maintain the
+    same angle relative to each other.
+  • Perpendicular — forces a 90° angle between
+    two selected lines.
+  • Tangent — a line or arc meets a curve without
+    crossing (continuous first derivative).
+
+4.7 Extruded Boss/Base
+Select a closed sketch profile, then:
+  Insert > Boss/Base > Extrude
+Set depth, draft angle, and direction.
+The feature appears in the FeatureManager tree.
+Blind, Through All, Up To Surface, and Mid Plane
+are the primary end condition types.
+
+NOTE: Rebuild errors (red) indicate constraint
+conflicts. Use Tools > Sketch Checker to diagnose.`,
+];
+
+var BOOK_COLORS = [0xcc3300, 0x1a2a6c, 0x2d4a1e, 0x5a1a5a, 0x8b5a00];
+var books = [];
+var bookOverlayEl  = document.getElementById('book-overlay');
+var bookPageEl     = document.getElementById('book-page');
+var bookOpen       = false;
+var reflectOverlayEl = document.getElementById('reflect-overlay');
+var reflectOpen      = false;
+var FREEDOM_POS      = new THREE.Vector3(12, 0, -14);
+var sockOverlayEl  = document.getElementById('sock-overlay');
+var sockOpen       = false;
+var SOCK_POS       = new THREE.Vector3(18, 0, 12);
+var videoOverlayEl = document.getElementById('video-overlay');
+var paintVideoEl   = document.getElementById('paint-video');
+var videoOpen      = false;
+var PAINT_POS      = new THREE.Vector3(-33.2, 0, -12.6);
+
+var BOOK_SPOTS = [
+    [-30, 14],   // esoteric
+    [18, -30],   // calculus
+    [-8, 35],    // lyrics
+    [42, 12],    // random
+    [-50, -18],  // random
+    [28, 48],    // random
+];
+
+BOOK_SPOTS.forEach(function(sp, bi) {
+    var bx = sp[0], bz = sp[1];
+    var coverCol = BOOK_COLORS[bi % BOOK_COLORS.length];
+    var bg = new THREE.Group();
+
+    // Cover (flat on ground, slightly open V shape)
+    var coverMat = new THREE.MeshBasicMaterial({ color: coverCol, side: THREE.DoubleSide });
+    var pageMat  = new THREE.MeshBasicMaterial({ color: 0xf0e8d4, side: THREE.DoubleSide });
+
+    // Left page
+    var lp = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.95), pageMat.clone());
+    lp.rotation.x = -Math.PI / 2;
+    lp.rotation.z =  0.18;
+    lp.position.set(-0.34, 0.02, 0);
+    bg.add(lp);
+
+    // Right page
+    var rp = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.95), pageMat.clone());
+    rp.rotation.x = -Math.PI / 2;
+    rp.rotation.z = -0.18;
+    rp.position.set( 0.34, 0.02, 0);
+    bg.add(rp);
+
+    // Spine
+    var sp2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.04, 0.95), coverMat.clone());
+    sp2.position.set(0, 0.02, 0);
+    bg.add(sp2);
+
+    // Soft glow under book
+    var gsp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: coverCol, transparent: true, opacity: 0.12,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    gsp.position.set(0, 0.01, 0);
+    gsp.scale.setScalar(3.2);
+    bg.add(gsp);
+
+    bg.position.set(bx, 0.01, bz);
+    bg.rotation.y = Math.random() * Math.PI * 2;
+    bg.userData.bookIdx = bi < BOOK_PAGES.length ? bi : Math.floor(Math.random() * BOOK_PAGES.length);
+    scene.add(bg);
+    books.push(bg);
+});
+
+function openBook(pageText) {
+    bookPageEl.textContent = pageText;
+    bookOverlayEl.classList.add('open');
+    bookOpen = true;
+    document.exitPointerLock();
+}
+function closeBook() {
+    bookOverlayEl.classList.remove('open');
+    bookOpen = false;
+    document.body.requestPointerLock();
+}
+function openVideo() {
+    videoOverlayEl.classList.add('open');
+    videoOpen = true;
+    paintVideoEl.currentTime = 0;
+    paintVideoEl.play();
+    document.exitPointerLock();
+}
+function closeVideo() {
+    videoOverlayEl.classList.remove('open');
+    videoOpen = false;
+    paintVideoEl.pause();
+    document.body.requestPointerLock();
+}
+document.getElementById('video-close').addEventListener('click', closeVideo);
+function openSock() {
+    sockOverlayEl.classList.add('open');
+    sockOpen = true;
+    document.exitPointerLock();
+}
+function closeSock() {
+    sockOverlayEl.classList.remove('open');
+    sockOpen = false;
+    document.body.requestPointerLock();
+}
+document.getElementById('sock-close').addEventListener('click', closeSock);
+function openReflect() {
+    reflectOverlayEl.classList.add('open');
+    reflectOpen = true;
+    document.exitPointerLock();
+}
+function closeReflect() {
+    reflectOverlayEl.classList.remove('open');
+    reflectOpen = false;
+    document.body.requestPointerLock();
+}
+document.getElementById('reflect-close').addEventListener('click', closeReflect);
+
+document.getElementById('book-close').addEventListener('click', closeBook);
+
+// ── SWEATSHIRT + PAINT ────────────────────────────────────────────────────
+
+var SHIRT_POS = new THREE.Vector3(-35, 0, -12);
+
+(function makeSweatshirt() {
+    // Canvas texture — white with bloody red paint
+    var c = document.createElement('canvas');
+    c.width = c.height = 512;
+    var ctx = c.getContext('2d');
+
+    // white base
+    ctx.fillStyle = '#f2f0ee';
+    ctx.fillRect(0, 0, 512, 512);
+
+    // layered red paint splatters — multiple shades
+    var reds = [
+        'rgba(140,0,0,0.85)',
+        'rgba(180,20,10,0.7)',
+        'rgba(90,0,0,0.9)',
+        'rgba(200,40,20,0.6)',
+        'rgba(110,10,5,0.75)',
+        'rgba(220,60,40,0.5)',
+    ];
+
+    function splat(cx2, cy2, r, col) {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.ellipse(cx2, cy2, r * (0.7 + Math.random()*0.6), r * (0.5 + Math.random()*0.7),
+            Math.random() * Math.PI, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    function drip(x2, y2, len, col) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2 + Math.random() * 5;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.bezierCurveTo(x2 + (Math.random()-0.5)*18, y2 + len*0.3,
+                          x2 + (Math.random()-0.5)*12, y2 + len*0.7,
+                          x2 + (Math.random()-0.5)*8,  y2 + len);
+        ctx.stroke();
+    }
+
+    // big central mass
+    for (var si = 0; si < 28; si++) {
+        splat(230 + (Math.random()-0.5)*180, 200 + (Math.random()-0.5)*200,
+              18 + Math.random()*55, reds[Math.floor(Math.random()*reds.length)]);
+    }
+    // drips
+    for (var di = 0; di < 18; di++) {
+        drip(120 + Math.random()*280, 80 + Math.random()*300,
+             40 + Math.random()*140, reds[Math.floor(Math.random()*reds.length)]);
+    }
+    // edge spatters
+    for (var ei = 0; ei < 40; ei++) {
+        splat(Math.random()*512, Math.random()*512,
+              3 + Math.random()*14, reds[Math.floor(Math.random()*reds.length)]);
+    }
+
+    var shirtTex = new THREE.CanvasTexture(c);
+
+    // Simple crumpled shape — a few overlapping planes
+    var sg = new THREE.Group();
+    var sm = new THREE.MeshBasicMaterial({ map: shirtTex, side: THREE.DoubleSide });
+
+    // main body panel
+    var main = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.1), sm);
+    main.rotation.x = -Math.PI / 2 + 0.22;
+    main.position.set(0, 0.06, 0);
+    sg.add(main);
+
+    // crumpled fold
+    var fold = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.7), sm.clone());
+    fold.rotation.x = -Math.PI / 2 + 0.55;
+    fold.rotation.z = 0.3;
+    fold.position.set(0.25, 0.14, -0.18);
+    sg.add(fold);
+
+    // sleeve drape
+    var sleeve = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.65), sm.clone());
+    sleeve.rotation.x = -Math.PI / 2 + 0.38;
+    sleeve.rotation.z = -0.7;
+    sleeve.position.set(-0.55, 0.08, 0.12);
+    sg.add(sleeve);
+
+    sg.position.copy(SHIRT_POS);
+    sg.rotation.y = 0.9;
+    scene.add(sg);
+}());
+
+(function makePaintArea() {
+    var px = SHIRT_POS.x + 1.8, pz = SHIRT_POS.z - 0.6;
+
+    // Flat tray / palette
+    var tray = new THREE.Mesh(
+        new THREE.BoxGeometry(0.85, 0.04, 0.55),
+        new THREE.MeshBasicMaterial({ color: 0x2a2420 })
+    );
+    tray.position.set(px, 0.02, pz);
+    scene.add(tray);
+
+    // Paint smears on tray (canvas tex)
+    var tc = document.createElement('canvas');
+    tc.width = 256; tc.height = 160;
+    var tctx = tc.getContext('2d');
+    tctx.fillStyle = '#2a2420';
+    tctx.fillRect(0, 0, 256, 160);
+    var smearReds = ['#8c0000','#b41414','#5a0000','#c82814','#6e0a05','#dc3c28'];
+    smearReds.forEach(function(col, i) {
+        tctx.fillStyle = col;
+        tctx.beginPath();
+        tctx.ellipse(28 + i * 36, 80 + (Math.random()-0.5)*30,
+                     18 + Math.random()*10, 9 + Math.random()*8,
+                     Math.random()*Math.PI, 0, Math.PI*2);
+        tctx.fill();
+    });
+    var trayTop = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.83, 0.53),
+        new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(tc) })
+    );
+    trayTop.rotation.x = -Math.PI / 2;
+    trayTop.position.set(px, 0.045, pz);
+    scene.add(trayTop);
+
+    // Paint bottles — different red shades
+    var bottleReds = [0x8c0000, 0xb41414, 0x5a0000, 0xc82814, 0x6e0a05, 0xdc3c28];
+    bottleReds.forEach(function(col, i) {
+        var bg2 = new THREE.Group();
+
+        // bottle body
+        var body = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.055, 0.065, 0.22, 10),
+            new THREE.MeshBasicMaterial({ color: col })
+        );
+        bg2.add(body);
+
+        // cap
+        var cap = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.038, 0.042, 0.06, 8),
+            new THREE.MeshBasicMaterial({ color: 0x111111 })
+        );
+        cap.position.y = 0.14;
+        bg2.add(cap);
+
+        // label stripe
+        var label = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.057, 0.057, 0.08, 10),
+            new THREE.MeshBasicMaterial({ color: 0xf0ede8, transparent: true, opacity: 0.82 })
+        );
+        label.position.y = -0.02;
+        bg2.add(label);
+
+        var angle = i % 2 === 0 ? -0.08 : 0.12;
+        bg2.rotation.z = angle + (Math.random()-0.5)*0.18;
+        bg2.position.set(
+            px - 0.32 + i * 0.13,
+            0.115,
+            pz + 0.28 + (i % 2) * (-0.14)
+        );
+        scene.add(bg2);
+    });
+}());
+
+// ── INVINCIBILITY BELIEF + AURA COLLAPSE ──────────────────────────────────
+
+var invBeliefTriggered = false;
+var invBeliefActive    = false;
+var invBeliefTimer     = 0;
+var invBeliefUITimer   = 0;
+var invBeliefGlitchTimer = 0;
+var invBeliefMsgEl  = document.getElementById('inv-msg');
+var invStatusEl     = document.getElementById('inv-status');
+
+var INV_MSGS = [
+    'STATUS: PROTECTED',
+    'SYSTEM RECOGNIZES AUTHORITY',
+    'DAMAGE NULLIFIED',
+    'AUTHORITY CONFIRMED',
+    'NO HAZARD DETECTED',
+    'CLEARANCE LEVEL: MAXIMUM',
+    'THREAT RESPONSE: DISABLED'
+];
+
+function triggerInvincibilityBelief() {
+    if (invBeliefTriggered) return;
+    invBeliefTriggered = true;
+    invBeliefActive    = true;
+    invBeliefTimer     = 0;
+    invBeliefUITimer   = 0;
+
+    // Aura collapse: crash any active aura session
+    if (auraMode) {
+        auraMode = false;
+        auraIntensity = 0;
+        auraCumulativeTime = 0;
+        showAuraMsg('signal collapse · belief override');
+    }
+    // Hard screen flash
+    portalFlashEl.style.transition = 'opacity 0.04s';
+    portalFlashEl.style.opacity = '0.55';
+    setTimeout(function() { portalFlashEl.style.transition = 'opacity 1.2s'; portalFlashEl.style.opacity = '0'; }, 80);
+
+    // Staggered opening UI messages
+    setTimeout(function() { if (locked) showInvMsg('STATUS: PROTECTED', 3200); }, 700);
+    setTimeout(function() { if (locked) showInvMsg('SYSTEM RECOGNIZES AUTHORITY', 3500); }, 4800);
+}
+
+function showInvMsg(txt, dur) {
+    invBeliefMsgEl.textContent = txt;
+    invBeliefMsgEl.style.opacity = '1';
+    clearTimeout(invBeliefMsgEl._t);
+    invBeliefMsgEl._t = setTimeout(function() { invBeliefMsgEl.style.opacity = '0'; }, dur || 3000);
+}
+
+function invBeliefPhysicsGlitch() {
+    // Brief Y sink — floor flickers beneath player
+    if (Math.random() < 0.5) {
+        camPos.y -= 0.15 + Math.random() * 0.2;
+        setTimeout(function() { if (camPos.y < 1.7) camPos.y = 1.7; }, 110);
+    }
+    // Single-frame fog spike
+    scene.fog.density = 0.004 + Math.random() * 0.03;
+}
+
+function updateInvincibilityBelief(dt) {
+    if (!invBeliefActive) return;
+    invBeliefTimer += dt;
+
+    // Pulsing status indicator top-left
+    var sOp = 0.45 + 0.45 * Math.sin(elapsed * 3.1);
+    invStatusEl.style.color = 'rgba(0,255,136,' + sOp.toFixed(2) + ')';
+
+    // Periodic reinforcement messages
+    invBeliefUITimer -= dt;
+    if (invBeliefUITimer <= 0 && locked) {
+        showInvMsg(INV_MSGS[Math.floor(Math.random() * INV_MSGS.length)], 3000);
+        invBeliefUITimer = 20 + Math.random() * 15;
+    }
+
+    // Periodic physics micro-glitches (environment starts ignoring player)
+    invBeliefGlitchTimer -= dt;
+    if (invBeliefGlitchTimer <= 0 && locked) {
+        invBeliefPhysicsGlitch();
+        invBeliefGlitchTimer = 5 + Math.random() * 7;
+    }
+}
+
+// ── FRIDGE (DOMESTIC INTERFACE / INVISIBLE SYSTEMS) ───────────────────────
+
+var FRIDGE_POS  = new THREE.Vector3(7, 0, 5);
+var fridgeOpen  = false;
+var fridgeDoor  = null;
+var fridgePanels = [];
+var fridgePromptEl = document.getElementById('fridge-prompt');
+var fridgeInteractCooldown = 0;
+
+// Emotional state values — drain slowly when player looks at fridge,
+// restock automatically when looked away
+var fridgeValues = { energy: 94, focus: 81, emotional: 67, defense: 100 };
+var fridgeLabels = ['ENERGY LEVELS', 'FOCUS RESERVES', 'EMOTIONAL CACHE', 'DEFENSE PROTOCOL'];
+var fridgeKeys   = ['energy', 'focus', 'emotional', 'defense'];
+
+function makeFridgePanelTex(label, value) {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 72;
+    var ctx = c.getContext('2d');
+
+    // dark panel bg
+    ctx.fillStyle = 'rgba(0,18,12,0.92)';
+    ctx.fillRect(0, 0, 256, 72);
+
+    // border
+    ctx.strokeStyle = 'rgba(0,255,136,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(3, 3, 250, 66);
+
+    // label
+    ctx.fillStyle = 'rgba(180,255,220,0.75)';
+    ctx.font = 'bold 11px Courier New, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, 12, 22);
+
+    // value (handles "DEFENSE PROTOCOL" as text)
+    var isNum = typeof value === 'number';
+    if (isNum) {
+        var pct = Math.round(value);
+        ctx.fillStyle = pct > 50 ? 'rgba(0,255,136,0.95)' : 'rgba(255,160,60,0.95)';
+        ctx.font = 'bold 22px Courier New, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(pct + '%', 240, 50);
+
+        // bar track
+        ctx.fillStyle = 'rgba(0,80,50,0.4)';
+        ctx.fillRect(12, 56, 212, 7);
+        // bar fill
+        ctx.fillStyle = pct > 50 ? 'rgba(0,255,136,0.75)' : 'rgba(255,120,30,0.75)';
+        ctx.fillRect(12, 56, Math.round(212 * pct / 100), 7);
+    } else {
+        ctx.fillStyle = 'rgba(0,255,136,0.95)';
+        ctx.font = 'bold 14px Courier New, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(String(value), 12, 52);
+    }
+
+    return new THREE.CanvasTexture(c);
+}
+
+(function buildFridge() {
+    var fg = new THREE.Group();
+    var bodyCol  = 0xd4d4d0;
+    var bodyMat  = new THREE.MeshBasicMaterial({ color: bodyCol });
+    var darkMat  = new THREE.MeshBasicMaterial({ color: 0x3a3a38 });
+    var handleMat = new THREE.MeshBasicMaterial({ color: 0xb8b8b4 });
+
+    // Main body (hollow box — 5 faces, front open)
+    var W = 1.1, H = 2.1, D = 0.85;
+    // back
+    fg.add(makeSlab(0, H/2, -D/2,   W, H, 0.05, bodyMat));
+    // left
+    fg.add(makeSlab(-W/2, H/2, 0,   0.05, H, D, bodyMat));
+    // right
+    fg.add(makeSlab( W/2, H/2, 0,   0.05, H, D, bodyMat));
+    // top
+    fg.add(makeSlab(0, H, 0,         W, 0.06, D, bodyMat));
+    // bottom / base
+    fg.add(makeSlab(0, 0.025, 0,     W, 0.05, D, darkMat));
+
+    // Interior back glow (visible when open)
+    var intGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTex, color: 0x00ffcc, transparent: true, opacity: 0.0,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    intGlow.position.set(0, H * 0.5, -D * 0.38);
+    intGlow.scale.setScalar(W * 2.5);
+    intGlow.userData.isFridgeGlow = true;
+    fg.add(intGlow);
+
+    // Interior shelves
+    [0.55, 1.05, 1.55].forEach(function(sy) {
+        var sh = new THREE.Mesh(
+            new THREE.BoxGeometry(W - 0.14, 0.03, D - 0.12),
+            new THREE.MeshBasicMaterial({ color: 0xaaffdd, transparent: true, opacity: 0.0 })
+        );
+        sh.position.set(0, sy, -0.04);
+        sh.userData.isFridgeShelf = true;
+        fg.add(sh);
+    });
+
+    // ─ Door group (hinges on left edge) ─
+    var dg = new THREE.Group();
+    dg.position.set(-W / 2, 0, D / 2);   // hinge at left-front corner
+
+    var doorM = new THREE.Mesh(
+        new THREE.BoxGeometry(W, H, 0.07),
+        new THREE.MeshBasicMaterial({ color: bodyCol })
+    );
+    doorM.position.set(W / 2, H / 2, 0);
+    dg.add(doorM);
+
+    // Door handle
+    var hn = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.55, 0.09),
+        handleMat
+    );
+    hn.position.set(W - 0.08, H / 2, 0.05);
+    dg.add(hn);
+
+    fg.add(dg);
+    fridgeDoor = dg;
+
+    // ─ Floating panel sprites (appear inside when open) ─
+    fridgeKeys.forEach(function(key, ki) {
+        var ps = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: makeFridgePanelTex(fridgeLabels[ki], fridgeValues[key]),
+            transparent: true, opacity: 0.0, depthWrite: false
+        }));
+        ps.position.set(0, 0.42 + ki * 0.42, D * 0.08);
+        ps.scale.set(0.9, 0.26, 1);
+        ps.userData.fridgePanelKey = key;
+        ps.userData.fridgePanelIdx = ki;
+        fg.add(ps);
+        fridgePanels.push(ps);
+    });
+
+    fg.position.copy(FRIDGE_POS);
+    fg.rotation.y = 0.55;   // slight angle so player sees it from spawn
+    scene.add(fg);
+
+    function makeSlab(x, y, z, w, h, d, mat) {
+        var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        m.position.set(x, y, z);
+        return m;
+    }
+}());
+
+var fridgeLookedAt = false;
+var fridgePanelUpdateTimer = 0;
+
+function updateFridge(dt) {
+    fridgeInteractCooldown = Math.max(0, fridgeInteractCooldown - dt);
+
+    // Tostado file fade in/out
+    if (window._tostadoSprite) {
+        var tTarget = tostadoVisible ? 1 : 0;
+        window._tostadoSprite.material.opacity += (tTarget - window._tostadoSprite.material.opacity) * Math.min(1, dt * 5);
+    }
+
+    // Drawer proximity prompt (reuse fridge-prompt element when near drawer)
+    var ddx2 = camPos.x - DRAWER_POS.x;
+    var ddz2 = camPos.z - DRAWER_POS.z;
+    var drawerNear = Math.sqrt(ddx2*ddx2 + ddz2*ddz2) < 3.5;
+
+    // Distance to fridge
+    var fdx = camPos.x - FRIDGE_POS.x;
+    var fdz = camPos.z - FRIDGE_POS.z;
+    var fdist = Math.sqrt(fdx * fdx + fdz * fdz);
+    var near = fdist < 3.8;
+
+    // Book proximity check for prompt
+    var nearBook = false;
+    for (var _bi = 0; _bi < books.length; _bi++) {
+        var _bdx = camPos.x - books[_bi].position.x, _bdz = camPos.z - books[_bi].position.z;
+        if (_bdx*_bdx + _bdz*_bdz < 7.84) { nearBook = true; break; }
+    }
+
+    var pvdx = camPos.x - PAINT_POS.x, pvdz = camPos.z - PAINT_POS.z;
+    var nearPaint = Math.sqrt(pvdx*pvdx + pvdz*pvdz) < 3.5;
+
+    var skdx2 = camPos.x - SOCK_POS.x, skdz2 = camPos.z - SOCK_POS.z;
+    var nearSock = Math.sqrt(skdx2*skdx2 + skdz2*skdz2) < 3.0;
+
+    var fpdx2 = camPos.x - FREEDOM_POS.x, fpdz2 = camPos.z - FREEDOM_POS.z;
+    var nearFreedom = Math.sqrt(fpdx2*fpdx2 + fpdz2*fpdz2) < 3.0;
+
+    if (nearFreedom) {
+        fridgePromptEl.textContent = 'E · look';
+        fridgePromptEl.style.opacity = '1';
+    } else if (nearSock) {
+        fridgePromptEl.textContent = 'E · inspect';
+        fridgePromptEl.style.opacity = '1';
+    } else if (nearPaint) {
+        fridgePromptEl.textContent = 'E · play';
+        fridgePromptEl.style.opacity = '1';
+    } else if (nearBook) {
+        fridgePromptEl.textContent = 'E · read';
+        fridgePromptEl.style.opacity = '1';
+    } else if (drawerNear) {
+        fridgePromptEl.textContent = 'E · open file';
+        fridgePromptEl.style.opacity = '1';
+    } else {
+        fridgePromptEl.textContent = 'E · open';
+        fridgePromptEl.style.opacity = (near && !fridgeOpen) ? '1' : '0';
+    }
+
+    // Is player looking at fridge?
+    var toFridge = new THREE.Vector3(FRIDGE_POS.x - camPos.x, 0, FRIDGE_POS.z - camPos.z).normalize();
+    camera.getWorldDirection(camWorldDir);
+    var lookDot = camWorldDir.dot(toFridge);
+    fridgeLookedAt = lookDot > 0.55 && fdist < 18;
+
+    // Restock / drain values
+    fridgePanelUpdateTimer -= dt;
+    if (fridgePanelUpdateTimer <= 0) {
+        fridgePanelUpdateTimer = 0.5;
+        fridgeKeys.forEach(function(k) {
+            if (k === 'defense') return;
+            if (fridgeLookedAt) {
+                // values drift down slightly while watched
+                fridgeValues[k] = Math.max(12, fridgeValues[k] - 0.4 - Math.random() * 0.6);
+            } else {
+                // restock automatically when not watched
+                fridgeValues[k] = Math.min(100, fridgeValues[k] + 1.8 + Math.random() * 1.2);
+            }
+        });
+        // Rebuild panel textures if open
+        if (fridgeOpen) refreshFridgePanels();
+    }
+
+    // Door swing animation
+    var targetAngle = fridgeOpen ? -Math.PI * 0.6 : 0;
+    fridgeDoor.rotation.y += (targetAngle - fridgeDoor.rotation.y) * Math.min(1, dt * 4.5);
+
+    // Interior glow + panels + shelves opacity
+    var openFraction = Math.abs(fridgeDoor.rotation.y) / (Math.PI * 0.6);
+    fridgePanels.forEach(function(ps) {
+        ps.material.opacity += (openFraction * 0.88 - ps.material.opacity) * Math.min(1, dt * 3.5);
+    });
+    // Interior elements (glow + shelves)
+    if (fridgeDoor.parent) {
+        fridgeDoor.parent.children.forEach(function(ch) {
+            if (ch.userData.isFridgeGlow) {
+                ch.material.opacity += (openFraction * 0.32 - ch.material.opacity) * Math.min(1, dt * 3);
+            }
+            if (ch.userData.isFridgeShelf && ch.material) {
+                ch.material.opacity += (openFraction * 0.55 - ch.material.opacity) * Math.min(1, dt * 3);
+            }
+        });
+    }
+}
+
+function refreshFridgePanels() {
+    fridgePanels.forEach(function(ps, ki) {
+        var key = fridgeKeys[ki];
+        var val = key === 'defense' ? 'ACTIVE' : fridgeValues[key];
+        ps.material.map = makeFridgePanelTex(fridgeLabels[ki], val);
+        ps.material.map.needsUpdate = true;
+    });
+}
+
+// ── DRAWER FILE ("Tostado") ────────────────────────
+var DRAWER_POS = new THREE.Vector3(-22, 0, 9);
+var tostadoVisible = false;
+
+(function() {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 340;
+    var ctx = c.getContext('2d');
+
+    // paper
+    ctx.fillStyle = '#f5edd8';
+    ctx.fillRect(0, 0, 256, 340);
+
+    // lined paper lines
+    ctx.strokeStyle = 'rgba(180,160,120,0.35)';
+    ctx.lineWidth = 1;
+    for (var li = 0; li < 16; li++) {
+        ctx.beginPath(); ctx.moveTo(18, 60 + li * 17); ctx.lineTo(238, 60 + li * 17); ctx.stroke();
+    }
+
+    // top fold crease
+    ctx.strokeStyle = 'rgba(160,140,100,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, 28); ctx.lineTo(256, 28); ctx.stroke();
+
+    // "Tostado" handwritten-ish
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = 'bold italic 54px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Tostado', 128, 155);
+
+    var tex = new THREE.CanvasTexture(c);
+    var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, opacity: 0, depthWrite: false
+    }));
+    sprite.scale.set(1.4, 1.85, 1);
+    // Float just above the drawer, slightly pulled out
+    sprite.position.set(DRAWER_POS.x, 1.85, DRAWER_POS.z - 0.2);
+    sprite.userData.isTostado = true;
+    scene.add(sprite);
+    window._tostadoSprite = sprite;
+}());
+
+// E key: books + drawer + fridge
+document.addEventListener('keydown', function(e) {
+    if (e.code !== 'KeyE') return;
+
+    // Close any open overlay
+    if (reflectOpen) { closeReflect(); return; }
+    if (sockOpen)    { closeSock();    return; }
+    if (videoOpen) { closeVideo(); return; }
+    if (bookOpen)  { closeBook();  return; }
+
+    if (!locked || fridgeInteractCooldown > 0) return;
+
+    // Freedom pole check
+    var fpdx = camPos.x - FREEDOM_POS.x, fpdz = camPos.z - FREEDOM_POS.z;
+    if (Math.sqrt(fpdx*fpdx + fpdz*fpdz) < 3.0) {
+        openReflect();
+        fridgeInteractCooldown = 0.5;
+        return;
+    }
+
+    // Sock check
+    var skdx = camPos.x - SOCK_POS.x, skdz = camPos.z - SOCK_POS.z;
+    if (Math.sqrt(skdx*skdx + skdz*skdz) < 3.0) {
+        openSock();
+        fridgeInteractCooldown = 0.5;
+        return;
+    }
+
+    // Paint area check
+    var pdx = camPos.x - PAINT_POS.x, pdz = camPos.z - PAINT_POS.z;
+    if (Math.sqrt(pdx*pdx + pdz*pdz) < 3.5) {
+        openVideo();
+        fridgeInteractCooldown = 0.8;
+        return;
+    }
+
+    // Book check
+    for (var bi2 = 0; bi2 < books.length; bi2++) {
+        var bk = books[bi2];
+        var bdx = camPos.x - bk.position.x;
+        var bdz = camPos.z - bk.position.z;
+        if (Math.sqrt(bdx*bdx + bdz*bdz) < 2.8) {
+            openBook(BOOK_PAGES[bk.userData.bookIdx]);
+            fridgeInteractCooldown = 0.5;
+            return;
+        }
+    }
+
+    // Drawer check
+    var ddx = camPos.x - DRAWER_POS.x;
+    var ddz = camPos.z - DRAWER_POS.z;
+    if (Math.sqrt(ddx*ddx + ddz*ddz) < 3.5) {
+        tostadoVisible = !tostadoVisible;
+        fridgeInteractCooldown = 0.5;
+        return;
+    }
+
+    // Fridge check
+    var fdx = camPos.x - FRIDGE_POS.x;
+    var fdz = camPos.z - FRIDGE_POS.z;
+    if (Math.sqrt(fdx*fdx + fdz*fdz) > 3.8) return;
+    fridgeOpen = !fridgeOpen;
+    fridgeInteractCooldown = 0.8;
+    if (fridgeOpen && !invBeliefTriggered && elapsed > 20) triggerInvincibilityBelief();
+});
+
+// ── SYSTEM 8: MICRO DISTORTIONS ───────────────────
+function updateMicroDistortions(dt) {
+    rollCurrent += (rollTarget - rollCurrent) * Math.min(1, dt * 2.0);
+    if (Math.random() < 0.004 && locked) {
+        jitterX2 = (Math.random() - 0.5) * 0.042;
+        jitterY2 = (Math.random() - 0.5) * 0.042;
+        jitterActive = 0.12;
+    }
+    if (jitterActive > 0) {
+        jitterActive -= dt;
+        camera.position.x += jitterX2;
+        camera.position.y += jitterY2;
+    }
+    var hOff = Math.sin(elapsed * 0.17) * 4.2 + Math.sin(elapsed * 0.73) * 1.6;
+    hudEl.style.transform = 'translateX(calc(-50% + ' + hOff.toFixed(1) + 'px))';
+}
+
+// ── MAIN LOOP ──────────────────────────────────────
+function animate() {
+    requestAnimationFrame(animate);
+    var dt = Math.min(clock.getDelta(), 0.05);
+    elapsed += dt;
+
+    // player movement
+    moveEuler.set(pitch, yaw, rollCurrent, 'YXZ');
+    camera.quaternion.setFromEuler(moveEuler);
+    fwd.set(0, 0, -1).applyEuler(moveEuler); fwd.y = 0; fwd.normalize();
+    right.set(1, 0, 0).applyEuler(moveEuler); right.y = 0; right.normalize();
+    var spd = 8.5 * dt;
+    if (keys['KeyW'] || keys['ArrowUp'])    camPos.addScaledVector(fwd,    spd);
+    if (keys['KeyS'] || keys['ArrowDown'])  camPos.addScaledVector(fwd,   -spd);
+    if (keys['KeyA'] || keys['ArrowLeft'])  camPos.addScaledVector(right, -spd);
+    if (keys['KeyD'] || keys['ArrowRight']) camPos.addScaledVector(right,  spd);
+
+    // jump
+    if (keys['Space'] && onGround) {
+        velY = 10;
+        onGround = false;
+        onJump();
+    }
+    // gravity
+    if (!onGround) {
+        velY -= 22 * dt;
+        camPos.y += velY * dt;
+        if (camPos.y <= 1.7) {
+            camPos.y = 1.7;
+            velY = 0;
+            onGround = true;
+        }
+    }
+
+    checkPortals(dt);
+    camera.position.copy(camPos);
+
+    // true path — warm organic pulse
+    for (var i = 0; i < pathSprites.length; i++) {
+        var s = pathSprites[i];
+        var pulse = 0.65 + 0.35 * Math.sin(elapsed * 2.2 + i * 0.28);
+        s.material.opacity = pulse;
+        s.position.y = s.userData.baseY + Math.sin(elapsed * 1.4 + i * 0.38) * 0.22;
+        s.scale.setScalar(1.5 + 0.28 * Math.sin(elapsed * 2.8 + i * 0.5));
+    }
+
+    // decoys — different rhythm; some briefly boosted by false reinforcement
+    for (var j = 0; j < decoySprites.length; j++) {
+        var ds = decoySprites[j];
+        ds.position.y = ds.userData.baseY + Math.sin(elapsed * 0.75 + ds.userData.phase) * 0.14;
+        if (ds.userData.boosted) {
+            ds.userData.boostTimer -= dt;
+            ds.material.opacity = 0.85 + 0.12 * Math.sin(elapsed * 4);
+            if (ds.userData.boostTimer <= 0) ds.userData.boosted = false;
+        } else {
+            ds.material.opacity = 0.3 + 0.22 * Math.sin(elapsed * 1.15 + ds.userData.phase);
+        }
+    }
+
+    // lanterns float upward
+    for (var k = 0; k < lanterns.length; k++) {
+        var l = lanterns[k];
+        l.userData.y += l.userData.speed * 0.018;
+        if (l.userData.y > 34) {
+            l.userData.y = 1.5 + Math.random() * 2;
+            l.position.x = l.userData.baseX + (Math.random() - 0.5) * 6;
+            l.position.z = l.userData.baseZ + (Math.random() - 0.5) * 6;
+        }
+        l.position.y = l.userData.y + Math.sin(elapsed * 0.5 + l.userData.phase) * 0.45;
+        l.material.opacity = 0.22 + 0.32 * Math.sin(elapsed * l.userData.speed * 2 + l.userData.phase);
+    }
+
+    // signs bob + glitch
+    for (var m = 0; m < floatSigns.length; m++) {
+        var fs = floatSigns[m];
+        fs.position.y = fs.userData.baseY + Math.sin(elapsed * fs.userData.speed + fs.userData.phase) * 0.55;
+        fs.material.opacity = 0.45 + 0.28 * Math.sin(elapsed * 0.4 + fs.userData.phase);
+
+        var fud = fs.userData;
+        fud.glitchTimer -= dt;
+        if (fud.glitching) {
+            fud.glitchDur -= dt;
+            // rapid flicker while glitching
+            if (Math.random() < 0.35) {
+                var gw = glitchWords[Math.floor(Math.random() * glitchWords.length)];
+                fs.material.map = makeSignTex(gw, fud.hexColor);
+                fs.material.map.needsUpdate = true;
+            }
+            if (fud.glitchDur <= 0) {
+                // snap back to original
+                fud.glitching = false;
+                fs.material.map = makeSignTex(fud.origText, fud.hexColor);
+                fs.material.map.needsUpdate = true;
+                fud.glitchTimer = 6 + Math.random() * 14;
+            }
+        } else if (fud.glitchTimer <= 0) {
+            fud.glitching = true;
+            fud.glitchDur = 0.18 + Math.random() * 0.55;
+        }
+    }
+
+    // spinning rings
+    for (var n = 0; n < spinners.length; n++) {
+        spinners[n].rotation.x += spinners[n].userData.rs.x * dt;
+        spinners[n].rotation.y += spinners[n].userData.rs.y * dt;
+        spinners[n].rotation.z += spinners[n].userData.rs.z * dt;
+    }
+
+    updateFedora(dt);
+    updateRainbowFlicker(dt);
+    checkBuildingCollisions();
+    updateGlitching(dt);
+    updatePetals();
+
+    // ── Psychological systems ──────────────────────
+    // Camera spin detection (system 4)
+    var yawDPS = Math.abs(yaw - psYaw);
+    psYaw = yaw;
+    if (yawDPS > 0.05 && locked) {
+        yawSpinAcc = Math.min(yawSpinAcc + yawDPS, 2.5);
+    } else {
+        yawSpinAcc = Math.max(0, yawSpinAcc - dt * 1.5);
+    }
+    if (yawSpinAcc > 1.8 && colorShiftTimer <= 0 && Math.random() < 0.45) {
+        colorShiftTimer = 2.2;
+        yawSpinAcc = 0;
+    }
+
+    // Still-timer for fog dim (system 4)
+    var movingNow = keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'] ||
+                    keys['ArrowUp'] || keys['ArrowDown'] || keys['ArrowLeft'] || keys['ArrowRight'];
+    if (movingNow) { stillTimer = 0; }
+    else {
+        stillTimer += dt;
+        if (stillTimer > 2.2 && dimTimer <= 0 && locked && Math.random() < 0.003) {
+            dimTimer = 3.5;
+        }
+    }
+
+    // System 1: false sign reinforcement timer
+    falseSignTimer -= dt;
+    if (falseSignTimer <= 0 && locked && movingNow) {
+        if (Math.random() < 0.4) triggerFalseReinforcement();
+        falseSignTimer = 12 + Math.random() * 18;
+    }
+
+    // Auth / narration message timers (systems 3 + 5)
+    if (authTimer > 0) { authTimer -= dt; if (authTimer <= 0) authEl.style.opacity = '0'; }
+    if (narrTimer > 0) { narrTimer -= dt; if (narrTimer <= 0) narrEl.style.opacity = '0'; }
+    narrCountdown -= dt;
+    if (narrCountdown <= 0 && locked) {
+        showNarr(narrPhrases[Math.floor(Math.random() * narrPhrases.length)]);
+        narrCountdown = 28 + Math.random() * 22;
+    }
+
+    updateWatchers(dt);
+    updateElectricity(dt);
+    updateFalseConnections(dt);
+    checkStaircaseTrigger();
+    updateStaircase(dt);
+    checkSymbolProximity();
+    updateFootmarks(dt);
+    updateMicroDistortions(dt);
+    updateAuraVision(dt);
+    updateInvincibilityBelief(dt);
+    updateFridge(dt);
+
+    renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener('resize', function() {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

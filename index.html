@@ -18,7 +18,7 @@
         
         body {
             overflow: hidden;
-            background: #f5f5f5;
+            background: #07020e;
         }
         
         #gameCanvas {
@@ -26,121 +26,190 @@
             width: 100vw;
             height: 100vh;
         }
-        
-        #title {
+
+        #title-block {
             position: fixed;
-            bottom: 200px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-family: 'Aurora 24', monospace;
-            font-size: 48px;
-            font-weight: 600;
-            color: rgba(0, 0, 0, 0.8);
-            letter-spacing: 2px;
-            z-index: 1000;
-        }
-        
-        #slider-container {
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 350px;
-            height: 60px;
-            background: rgba(0, 0, 0, 0.85);
-            border-radius: 30px;
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            pointer-events: all;
-            z-index: 1000;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            opacity: 0;
-            transition: opacity 0.5s;
-        }
-        
-        #slider-container.visible {
-            opacity: 1;
-        }
-        
-        #slider-track {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            border-radius: 30px;
-            overflow: hidden;
-        }
-        
-        #slider-text {
-            position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 18px;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.5);
+            text-align: center;
             pointer-events: none;
-            z-index: 1;
-            letter-spacing: 0.5px;
+            z-index: 10;
         }
-        
-        #slider-handle {
-            position: absolute;
-            left: 3px;
-            top: 3px;
-            width: 54px;
-            height: 54px;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 27px;
-            cursor: grab;
-            z-index: 2;
-            transition: box-shadow 0.2s;
-            display: flex;
+
+        #still-title {
+            font-family: 'Aurora 24', Georgia, serif;
+            font-size: clamp(28px, 4.8vw, 64px);
+            color: rgba(255, 220, 240, 0);
+            letter-spacing: 0.14em;
+            white-space: nowrap;
+            user-select: none;
+            margin-bottom: 0.55em;
+        }
+
+        #still-subtitle {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: clamp(12px, 1.5vw, 20px);
+            color: rgba(255, 248, 253, 0);
+            letter-spacing: 0.10em;
+            white-space: nowrap;
+            user-select: none;
+            font-style: italic;
+        }
+
+        #start-btn {
+            display: block;
+            margin: 1.4em auto 0;
+            padding: 0.52em 2.0em;
+            border-radius: 999px;
+            border: 1.5px solid rgba(255, 175, 230, 0.75);
+            background: rgba(18, 4, 36, 0.72);
+            color: rgba(255, 235, 248, 1);
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: clamp(11px, 1.2vw, 16px);
+            font-style: italic;
+            letter-spacing: 0.09em;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.55s ease, background 0.18s, border-color 0.18s, box-shadow 0.18s;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.95);
+            box-shadow: 0 0 18px rgba(190, 90, 240, 0.38), 0 2px 10px rgba(0,0,0,0.65);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        #start-btn:hover {
+            background: rgba(45, 10, 80, 0.85);
+            border-color: rgba(255, 140, 220, 1.0);
+            box-shadow: 0 0 28px rgba(210, 80, 255, 0.55), 0 2px 12px rgba(0,0,0,0.70);
+        }
+
+
+        #more-info-btn {
+            position: fixed;
+            top: 18px;
+            right: 18px;
+            z-index: 80;
+            padding: 0.62em 1.25em;
+            border-radius: 999px;
+            border: 1.5px solid rgba(255, 175, 230, 0.78);
+            background: rgba(18, 4, 36, 0.70);
+            color: rgba(255, 235, 248, 1);
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: clamp(11px, 1vw, 15px);
+            font-style: italic;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.95);
+            box-shadow: 0 0 18px rgba(190, 90, 240, 0.34), 0 2px 10px rgba(0,0,0,0.65);
+            backdrop-filter: blur(7px);
+            -webkit-backdrop-filter: blur(7px);
+            transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+        }
+
+        #more-info-btn:hover {
+            background: rgba(45, 10, 80, 0.88);
+            border-color: rgba(255, 140, 220, 1.0);
+            box-shadow: 0 0 28px rgba(210, 80, 255, 0.55), 0 2px 12px rgba(0,0,0,0.70);
+            transform: translateY(-1px);
+        }
+
+        #info-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 150;
+            display: none;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            padding: 24px;
+            background: rgba(4, 0, 10, 0.58);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
-        
-        #slider-handle::before {
-            content: '';
-            width: 0;
-            height: 0;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-bottom: 12px solid #666;
-            transform: rotate(-90deg);
-            margin-right: -2px;
+
+        #info-modal-overlay.show {
+            display: flex;
         }
-        
-        #slider-handle:active {
-            cursor: grabbing;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+
+        #info-modal {
+            width: min(720px, 92vw);
+            max-height: 78vh;
+            overflow-y: auto;
+            border-radius: 26px;
+            border: 1.5px solid rgba(255, 185, 235, 0.72);
+            background: linear-gradient(135deg, rgba(18, 4, 36, 0.93), rgba(55, 12, 78, 0.90));
+            color: rgba(255, 245, 252, 1);
+            padding: 30px 32px;
+            box-shadow: 0 0 45px rgba(205, 70, 255, 0.42), 0 18px 60px rgba(0,0,0,0.75);
+            font-family: Georgia, 'Times New Roman', serif;
+            line-height: 1.62;
+            letter-spacing: 0.015em;
+            position: relative;
         }
-        
-        #slider-fill {
+
+        #info-modal p {
+            font-size: clamp(14px, 1.35vw, 18px);
+            text-shadow: 0 1px 5px rgba(0,0,0,0.86);
+        }
+
+        #close-info-btn {
             position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            width: 0%;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 30px;
-            transition: width 0.1s;
-            z-index: 0;
+            top: 14px;
+            right: 16px;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 220, 245, 0.58);
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 245, 252, 1);
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
         }
+
+        #close-info-btn:hover {
+            background: rgba(255, 180, 235, 0.22);
+        }
+
+
+        #flash-overlay {
+            position: fixed;
+            inset: 0;
+            background: #ffffff;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.32s ease-in;
+            z-index: 200;
+        }
+
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-    
-    <div id="title">Still Together</div>
-    
-    <div id="slider-container">
-        <div id="slider-track">
-            <div id="slider-fill"></div>
-            <div id="slider-text">SWIPE TO ENTER!</div>
-            <div id="slider-handle"></div>
+
+    <button id="more-info-btn">More info here</button>
+    <div id="info-modal-overlay" aria-hidden="true">
+        <div id="info-modal" role="dialog" aria-modal="true" aria-label="More information about Still Together">
+            <button id="close-info-btn" aria-label="Close more information">×</button>
+ <p>
+During manic psychosis, reality reacted to me, and at any moment it felt ready to freeze into a flat 2D frame, then peel back to reveal hidden systems. Electricity went out when I stepped into stores, and every sign seemed to choreograph a route made just for me, so I chased them, believing they pointed toward the reality I truly belonged to.
+</p>
+
+<p>
+While finishing my film degree at UC Santa Cruz, I encountered the writings of Myron W. Krueger, Jean Baudrillard and N. Katherine Hayles, and discovered my private delusions already outlined in their descriptions of responsive environments, simulations, and posthuman embodiment. It felt as if those ideas had formed in a collective consciousness and surfaced first as urgent signals in my mind, then returned through books to show they were shared patterns, not secret prophecies.
+</p>
+
+<p>
+That recognition eased the pressure and redirected my energy from decoding signs to designing them. Still Together translates that shift into play, turning several symptoms into a mechanic so players engage with invisible systems, see how meaning emerges as a pattern, and trade paranoia for creative control.
+</p>    
         </div>
     </div>
+    <div id="title-block">
+        <div id="still-title">Still Together</div>
+        <div id="still-subtitle"></div>
+        <button id="start-btn">Click Me to Start! :)</button>
+    </div>
+    <div id="flash-overlay"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
@@ -149,12 +218,11 @@
         // ============================================
         
         let scene, camera, renderer;
+        let bgScene, bgCamera, bgMat;
         let clock;
         let glitchShapes = [];
-        
-        // Slider
-        let isDragging = false;
-        let sliderProgress = 0;
+        let lights = [];
+
         
         // ============================================
         // INIT THREE.JS
@@ -162,8 +230,7 @@
         
         function initThreeJS() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xf5f5f5);
-            
+
             camera = new THREE.PerspectiveCamera(
                 75,
                 window.innerWidth / window.innerHeight,
@@ -179,90 +246,235 @@
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            
+            renderer.autoClear = false;
+
             clock = new THREE.Clock();
+
+            initBackground();
+            addLights();
             
             window.addEventListener('resize', onWindowResize, false);
             
             // Create glitch art scene
             createGlitchArtScene();
-            
-            // Setup slider
-            setupSlider();
+        }
+
+        // ============================================
+        // BACKGROUND SHADER
+        // ============================================
+
+        function initBackground() {
+            bgScene  = new THREE.Scene();
+            bgCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+            const bgVert = `
+                varying vec2 vUv;
+                void main(){ vUv = uv; gl_Position = vec4(position,1.0); }
+            `;
+
+            const bgFrag = `
+                precision highp float;
+                uniform float uTime;
+                uniform vec2  uResolution;
+                uniform float uGlitch;
+                uniform vec2  uGlitchShake;
+                uniform float uPop;
+                varying vec2  vUv;
+
+                float mb(vec2 p, vec2 c, float r){
+                    vec2 d = p-c; return exp(-dot(d,d)/(r*r));
+                }
+
+                float field(vec2 p, float t){
+                    float f = 0.0;
+                    f += mb(p, vec2( 0.52*sin(t*0.58),       0.42*cos(t*0.43)),       0.72);
+                    f += mb(p, vec2(-0.63*cos(t*0.49),       0.57*sin(t*0.71)),       0.58);
+                    f += mb(p, vec2( 0.78*sin(t*0.37+1.2),  -0.38*cos(t*0.60)),       0.50);
+                    f += mb(p, vec2(-0.46*cos(t*0.66),      -0.62*sin(t*0.44+0.8)),   0.54);
+                    f += mb(p, vec2( 0.22*sin(t*0.80+2.1),   0.68*cos(t*0.34)),       0.42);
+                    f += mb(p, vec2(-0.68*sin(t*0.28),       0.22*cos(t*0.57+1.5)),   0.46);
+                    f += mb(p, vec2( 0.35*cos(t*0.53+0.6),  -0.50*sin(t*0.76)),       0.36);
+                    return f;
+                }
+
+                void main(){
+                    vec2 uv = (vUv-0.5)*2.0;
+                    uv.x *= uResolution.x/uResolution.y;
+                    uv += uGlitchShake;
+                    float t  = uTime*0.11;
+                    float d  = length(uv);
+
+                    float f  = field(uv, t);
+
+                    /* Gradient normals via finite diff */
+                    float eps = 0.004;
+                    float gx  = field(uv+vec2(eps,0.0),t) - f;
+                    float gy  = field(uv+vec2(0.0,eps),t) - f;
+                    float gm  = length(vec2(gx,gy));
+                    vec2  n   = gm>0.0001 ? vec2(gx,gy)/gm : vec2(0.707,0.707);
+
+                    /* Two specular lights */
+                    float sA = pow(max(dot(n, normalize(vec2(-0.55, 0.80))), 0.0), 7.0);
+                    float sB = pow(max(dot(n, normalize(vec2( 0.70,-0.38))), 0.0),13.0);
+                    float bm = smoothstep(0.08, 0.55, f);
+
+                    /* Rainbow iridescent sweep — preserves the hue variety */
+                    float iri  = sin(f*4.2  - t*0.90) *0.5+0.5;
+                    float iri2 = sin(f*7.0  + t*0.55 + uv.x*1.4)*0.5+0.5;
+                    float iri3 = sin(f*11.0 - t*0.35 + uv.y*0.9)*0.5+0.5;
+
+                    /* Base palette: dark biological purple */
+                    vec3 cVoid  = vec3(0.03, 0.01, 0.06);
+                    vec3 cDeep  = vec3(0.09, 0.03, 0.14);
+                    vec3 cMid   = vec3(0.22, 0.08, 0.28);
+
+                    /* Iridescent surface band — rainbow shifted */
+                    vec3 cIriA  = vec3(0.92, 0.48, 0.80);  /* rose-pink   */
+                    vec3 cIriB  = vec3(0.38, 0.82, 0.94);  /* cyan-teal   */
+                    vec3 cIriC  = vec3(0.98, 0.86, 0.28);  /* amber-gold  */
+                    vec3 cIriD  = vec3(0.68, 0.42, 0.96);  /* violet      */
+                    vec3 rainbow = mix(
+                        mix(cIriA, cIriB, iri),
+                        mix(cIriC, cIriD, iri3),
+                        iri2 * 0.55
+                    );
+
+                    /* Inner pearl / chrome */
+                    vec3 cPerl  = vec3(0.92, 0.84, 0.90);
+                    vec3 cWhite = vec3(1.00, 0.97, 0.98);
+                    vec3 cGold  = vec3(0.96, 0.78, 0.44);
+
+                    /* Build layers with smoothstep */
+                    vec3 col = mix(cVoid, cDeep, smoothstep(0.0, 2.2, d));
+                    col = mix(col, cMid,    smoothstep(0.0, 0.18, f)*(1.0-smoothstep(0.18,0.38,f))*0.72);
+                    col = mix(col, rainbow, smoothstep(0.22, 0.60, f) * 0.80);
+                    col = mix(col, cPerl,   smoothstep(0.80, 1.40, f) * 0.88);
+                    col = mix(col, cWhite,  smoothstep(1.40, 2.60, f));
+
+                    /* Specular gloss — the chrome/silicone quality */
+                    col += cWhite * sA * 0.82 * bm;
+                    col += cGold  * sB * 0.60 * bm;
+
+                    /* Soft radial centre brightening */
+                    col = mix(col, cWhite, exp(-d*3.2)*0.22);
+
+                    /* Edge vignette */
+                    col *= 1.0 - smoothstep(1.30, 2.10, d)*0.65;
+
+                    /* Glitch: shake to B&W with scanlines + white flash */
+                    if (uGlitch > 0.001) {
+                        /* Desaturate */
+                        float grey = dot(col, vec3(0.299, 0.587, 0.114));
+                        /* Horizontal scanline bands */
+                        float scan = 0.72 + 0.28 * step(0.5, fract(vUv.y * uResolution.y * 0.20));
+                        grey *= scan;
+                        /* Horizontal slice tear: offset a random band */
+                        float bandY  = fract(uTime * 7.3);
+                        float inBand = step(0.0, vUv.y - bandY) * step(vUv.y - bandY, 0.06);
+                        grey = mix(grey, 1.0 - grey, inBand * uGlitch * 0.6);
+                        /* Occasional white flash on high flicker */
+                        float flash = step(0.88, fract(uTime * 17.1)) * uGlitch;
+                        grey = mix(grey, 1.0, flash * 0.55);
+                        vec3 bwCol = vec3(grey);
+                        col = mix(col, bwCol, uGlitch);
+                    }
+
+                    /* Bubble pop — expanding shockwave ring then white flash */
+                    if (uPop > 0.001) {
+                        float waveFront = uPop * 2.7;
+                        float ringDist  = abs(d - waveFront);
+                        float ring      = exp(-ringDist * ringDist * 14.0) * max(0.0, 1.0 - uPop * 1.35);
+                        col += vec3(1.0) * ring * 3.0;
+                        col  = mix(col, vec3(1.0), smoothstep(0.52, 1.0, uPop));
+                    }
+
+                    gl_FragColor = vec4(clamp(col,0.0,1.0), 1.0);
+                }
+            `;
+
+            bgMat = new THREE.ShaderMaterial({
+                vertexShader: bgVert,
+                fragmentShader: bgFrag,
+                uniforms: {
+                    uTime:        { value: 0 },
+                    uResolution:  { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    uGlitch:      { value: 0 },
+                    uGlitchShake: { value: new THREE.Vector2(0, 0) },
+                    uPop:         { value: 0 }
+                },
+                depthTest:  false,
+                depthWrite: false
+            });
+            bgScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat));
+        }
+
+        // ============================================
+        // LIGHTS
+        // ============================================
+
+        function addLights() {
+            scene.add(new THREE.AmbientLight(0x180820, 1.4));
+            [
+                { color: 0xff70c0, intensity: 3.2, pos: [ 15,  10, 15] },
+                { color: 0xb068f0, intensity: 2.6, pos: [-15,  -8, 18] },
+                { color: 0xf0b838, intensity: 2.2, pos: [  0,  15, 10] },
+                { color: 0x48d8f8, intensity: 1.9, pos: [-12,   5, 12] },
+            ].forEach(ld => {
+                const pl = new THREE.PointLight(ld.color, ld.intensity, 90);
+                pl.position.set(...ld.pos);
+                scene.add(pl);
+                lights.push(pl);
+            });
         }
         
         // ============================================
-        // CREATE GLITCH ART SCENE
+        // ART SCENE
         // ============================================
         
         function createGlitchArtScene() {
-            // Create colorful geometric shapes inspired by the image
+            /* Biological-synthetic iridescent palette — keeps the rainbow variety */
             const colors = [
-                0xff0080, 0xffff00, 0x00ffff, 0xff0000, 
-                0x00ff00, 0xff6600, 0x8800ff, 0x0088ff,
-                0xff00ff, 0x00ff88
+                0xf060a8, // deep rose
+                0xc8f040, // acid lime (keeps the yellow)
+                0x40e8f0, // cyan-aqua
+                0xf84060, // hot red-pink
+                0x50f8a0, // seafoam green
+                0xf88030, // amber-orange
+                0xa050f8, // violet
+                0x40a0f8, // sky blue
+                0xf040f8, // magenta
+                0x80f8c0, // mint
             ];
-            
-            // Rainbow diagonal stripes in background
+
+            // Intro curtain: iridescent diagonal stripes that slide away to reveal the scene
             for (let i = 0; i < 10; i++) {
-                const stripeGeo = new THREE.PlaneGeometry(100, 3);
-                const stripeMat = new THREE.MeshBasicMaterial({ 
+                const stripeGeo = new THREE.PlaneGeometry(100, 5);
+                const stripeMat = new THREE.MeshStandardMaterial({
                     color: colors[i],
+                    metalness: 0.80,
+                    roughness: 0.14,
                     transparent: true,
-                    opacity: 0.6
+                    opacity: 0.72,
+                    side: THREE.DoubleSide,
                 });
                 const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-                stripe.position.set(
-                    (i - 5) * 8,
-                    (i - 5) * 4,
-                    -10
-                );
+                const sx = (i - 5) * 8;
+                const sy = (i - 5) * 4;
+                stripe.position.set(sx, sy, 5);
                 stripe.rotation.z = Math.PI / 4;
+                stripe.userData.isIntroStripe = true;
+                stripe.userData.initX = sx;
+                stripe.userData.initY = sy;
+                /* stripes i<5 slide down-left, i>=5 slide up-right */
+                const d = i < 5 ? -1 : 1;
+                stripe.userData.slideX = d * 0.707;
+                stripe.userData.slideY = d * 0.707;
                 scene.add(stripe);
                 glitchShapes.push(stripe);
             }
+
             
-            // Pattern horizontal bars
-            for (let i = 0; i < 15; i++) {
-                const barGeo = new THREE.PlaneGeometry(Math.random() * 30 + 20, 0.5);
-                const pattern = Math.random();
-                let barMat;
-                
-                if (pattern < 0.3) {
-                    // Grid pattern
-                    barMat = new THREE.MeshBasicMaterial({ 
-                        color: 0x4444ff,
-                        wireframe: true,
-                        transparent: true,
-                        opacity: 0.5
-                    });
-                } else if (pattern < 0.6) {
-                    // Solid color
-                    barMat = new THREE.MeshBasicMaterial({ 
-                        color: 0x333333,
-                        transparent: true,
-                        opacity: 0.3
-                    });
-                } else {
-                    // Textured look
-                    barMat = new THREE.MeshBasicMaterial({ 
-                        color: Math.random() > 0.5 ? 0x000000 : 0xffffff,
-                        transparent: true,
-                        opacity: 0.2
-                    });
-                }
-                
-                const bar = new THREE.Mesh(barGeo, barMat);
-                bar.position.set(
-                    (Math.random() - 0.5) * 40,
-                    (i - 7) * 2,
-                    Math.random() * 5 - 2
-                );
-                scene.add(bar);
-                glitchShapes.push(bar);
-            }
-            
-            // Scattered geometric shapes
+            // mess of geometric shapes
             for (let i = 0; i < 80; i++) {
                 const shapeType = Math.floor(Math.random() * 5);
                 let geo, mesh;
@@ -289,13 +501,23 @@
                         break;
                 }
                 
-                const mat = new THREE.MeshBasicMaterial({
-                    color: colors[Math.floor(Math.random() * colors.length)],
-                    transparent: true,
-                    opacity: Math.random() * 0.5 + 0.3,
-                    side: THREE.DoubleSide,
-                    wireframe: Math.random() > 0.7
-                });
+                const isWire = Math.random() > 0.72;
+                const mat = isWire
+                    ? new THREE.MeshBasicMaterial({
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        transparent: true,
+                        opacity: Math.random() * 0.45 + 0.28,
+                        side: THREE.DoubleSide,
+                        wireframe: true,
+                    })
+                    : new THREE.MeshStandardMaterial({
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        metalness: 0.55 + Math.random() * 0.40,
+                        roughness: 0.08 + Math.random() * 0.28,
+                        transparent: true,
+                        opacity: Math.random() * 0.42 + 0.28,
+                        side: THREE.DoubleSide,
+                    });
                 
                 mesh = new THREE.Mesh(geo, mat);
                 mesh.position.set(
@@ -310,157 +532,31 @@
                 );
                 
                 mesh.userData.rotSpeed = {
-                    x: (Math.random() - 0.5) * 0.02,
-                    y: (Math.random() - 0.5) * 0.02,
-                    z: (Math.random() - 0.5) * 0.02
+                    x: (Math.random() - 0.5) * 0.011,
+                    y: (Math.random() - 0.5) * 0.011,
+                    z: (Math.random() - 0.5) * 0.011
                 };
                 mesh.userData.driftSpeed = new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.05,
-                    (Math.random() - 0.5) * 0.05,
-                    (Math.random() - 0.5) * 0.05
+                    (Math.random() - 0.5) * 0.038,
+                    (Math.random() - 0.5) * 0.038,
+                    (Math.random() - 0.5) * 0.030
                 );
                 
                 scene.add(mesh);
                 glitchShapes.push(mesh);
             }
-            
-            // Create overlay scribbles/lines
-            for (let i = 0; i < 30; i++) {
-                const curve = new THREE.QuadraticBezierCurve3(
-                    new THREE.Vector3(
-                        (Math.random() - 0.5) * 40,
-                        (Math.random() - 0.5) * 30,
-                        Math.random() * 5
-                    ),
-                    new THREE.Vector3(
-                        (Math.random() - 0.5) * 40,
-                        (Math.random() - 0.5) * 30,
-                        Math.random() * 5
-                    ),
-                    new THREE.Vector3(
-                        (Math.random() - 0.5) * 40,
-                        (Math.random() - 0.5) * 30,
-                        Math.random() * 5
-                    )
-                );
-                
-                const points = curve.getPoints(50);
-                const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-                const lineMat = new THREE.LineBasicMaterial({
-                    color: Math.random() > 0.5 ? 0x000000 : colors[Math.floor(Math.random() * colors.length)],
-                    transparent: true,
-                    opacity: Math.random() * 0.4 + 0.2
-                });
-                
-                const line = new THREE.Line(lineGeo, lineMat);
-                scene.add(line);
-                glitchShapes.push(line);
-            }
+
         }
         
-        // ============================================
-        // SLIDER SETUP
-        // ============================================
-        
-        function setupSlider() {
-            const handle = document.getElementById('slider-handle');
-            const container = document.getElementById('slider-container');
-            const track = document.getElementById('slider-track');
-            const fill = document.getElementById('slider-fill');
-            const text = document.getElementById('slider-text');
-            
-            let startX = 0;
-            let currentX = 0;
-            const maxSlide = container.offsetWidth - handle.offsetWidth - 10;
-            
-            function onStart(e) {
-                isDragging = true;
-                startX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-                currentX = handle.offsetLeft;
-                e.preventDefault();
-            }
-            
-            function onMove(e) {
-                if (!isDragging) return;
-                
-                const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
-                const deltaX = clientX - startX;
-                let newX = currentX + deltaX;
-                
-                // Clamp between 5 and maxSlide
-                newX = Math.max(5, Math.min(maxSlide, newX));
-                
-                handle.style.left = newX + 'px';
-                
-                // Update progress
-                sliderProgress = newX / maxSlide;
-                fill.style.width = (sliderProgress * 100) + '%';
-                
-                // Fade text as slider moves
-                text.style.opacity = 1 - sliderProgress;
-                
-                // Check if completed
-                if (sliderProgress >= 0.95) {
-                    onSliderComplete();
-                }
-                
-                e.preventDefault();
-            }
-            
-            function onEnd(e) {
-                if (!isDragging) return;
-                isDragging = false;
-                
-                // Snap back if not completed
-                if (sliderProgress < 0.95) {
-                    handle.style.transition = 'left 0.3s ease-out';
-                    handle.style.left = '5px';
-                    fill.style.transition = 'width 0.3s ease-out';
-                    fill.style.width = '0%';
-                    text.style.transition = 'opacity 0.3s';
-                    text.style.opacity = '1';
-                    
-                    setTimeout(() => {
-                        handle.style.transition = '';
-                        fill.style.transition = '';
-                        text.style.transition = '';
-                    }, 300);
-                    
-                    sliderProgress = 0;
-                }
-                
-                e.preventDefault();
-            }
-            
-            // Mouse events
-            handle.addEventListener('mousedown', onStart);
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onEnd);
-            
-            // Touch events
-            handle.addEventListener('touchstart', onStart);
-            document.addEventListener('touchmove', onMove);
-            document.addEventListener('touchend', onEnd);
-        }
-        
-        function onSliderComplete() {
-            isDragging = false;
-            
-            const container = document.getElementById('slider-container');
-            container.style.transition = 'opacity 1s';
-            container.style.opacity = '0';
-            
-            // Redirect after animation
-            setTimeout(() => {
-                window.location.href = 'phase1.html';
-            }, 1000);
-        }
+
         
         // ============================================
         // UPDATE LOGIC
         // ============================================
         
         function updateGlitchShapes(deltaTime) {
+            const now = clock.elapsedTime;
+
             glitchShapes.forEach(shape => {
                 if (shape.userData.rotSpeed) {
                     shape.rotation.x += shape.userData.rotSpeed.x;
@@ -480,22 +576,201 @@
                     }
                 }
             });
-            
-            // Slow camera rotation
-            camera.rotation.z = Math.sin(Date.now() * 0.0001) * 0.02;
+
+            /* Orbit lights slowly — shifting specular highlight on every chrome surface */
+            lights.forEach((light, i) => {
+                const phase = i * Math.PI * 0.5;
+                const spd   = 0.16 + i * 0.045;
+                light.position.x = Math.cos(now * spd + phase) * 24;
+                light.position.y = Math.sin(now * spd * 0.7 + phase) * 18;
+                light.position.z = 10 + Math.sin(now * 0.28 + phase) * 7;
+            });
+
+            /* Imperceptibly slow camera breathing — organic, meditative */
+            camera.rotation.z = Math.sin(now * 0.055) * 0.016;
+            camera.position.z = 20 + Math.sin(now * 0.038) * 1.2;
         }
         
         // ============================================
         // ANIMATION LOOP
         // ============================================
-        
+
+
+        const moreInfoBtn = document.getElementById('more-info-btn');
+        const infoOverlay = document.getElementById('info-modal-overlay');
+        const closeInfoBtn = document.getElementById('close-info-btn');
+
+        function openInfoModal() {
+            infoOverlay.classList.add('show');
+            infoOverlay.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeInfoModal() {
+            infoOverlay.classList.remove('show');
+            infoOverlay.setAttribute('aria-hidden', 'true');
+        }
+
+        moreInfoBtn.addEventListener('click', openInfoModal);
+        closeInfoBtn.addEventListener('click', closeInfoModal);
+        infoOverlay.addEventListener('click', (event) => {
+            if (event.target === infoOverlay) closeInfoModal();
+        });
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeInfoModal();
+        });
+
+        const titleEl    = document.getElementById('still-title');
+        const subtitleEl = document.getElementById('still-subtitle');
+        const btnEl      = document.getElementById('start-btn');
+        const flashEl    = document.getElementById('flash-overlay');
+        const SUBTITLE_FULL = 'A conceptual gamified experience by Damaris Guzman';
+
+        const introState = {
+            startTime:   null,
+            done:        false,
+            typedChars:  0,
+            lastTypeAt:  0,
+        };
+
+        function updateIntro(now) {
+            if (introState.done) return;
+            if (introState.startTime === null) introState.startTime = now;
+            const el = now - introState.startTime;
+
+            const SLIDE_DUR   = 1.80;
+            const TITLE_START = 1.10;
+            const TITLE_IN    = 0.90;
+            const TYPE_START  = TITLE_START + TITLE_IN + 0.30;
+            const TYPE_SPEED  = 0.042;
+
+            /* ── slide stripes ── */
+            glitchShapes.forEach(shape => {
+                if (!shape.userData.isIntroStripe) return;
+                if (el >= SLIDE_DUR) { shape.visible = false; return; }
+                const p = el / SLIDE_DUR;
+                const e = 1 - Math.pow(1 - p, 3.5);
+                const dist = e * 90;
+                shape.position.x = shape.userData.initX + shape.userData.slideX * dist;
+                shape.position.y = shape.userData.initY + shape.userData.slideY * dist;
+                shape.material.opacity = 0.72 * (1 - e * 0.88);
+            });
+
+            /* ── title: fade in, then stay permanently ── */
+            let alpha = 0;
+            if (el >= TITLE_START) {
+                alpha = Math.min((el - TITLE_START) / TITLE_IN, 1.0);
+            }
+
+            titleEl.style.color      = `rgba(255,218,238,${alpha})`;
+            titleEl.style.textShadow = [
+                `0 2px 6px rgba(10,2,20,${alpha * 0.95})`,
+                `0 0 28px rgba(255,130,205,${alpha * 0.80})`,
+                `0 0 70px rgba(190,80,255,${alpha * 0.50})`,
+                `0 0 120px rgba(130,50,255,${alpha * 0.28})`,
+            ].join(',');
+
+            /* ── subtitle typewriter ── */
+            if (el >= TYPE_START && introState.typedChars < SUBTITLE_FULL.length) {
+                const charsNeeded = Math.floor((el - TYPE_START) / TYPE_SPEED);
+                introState.typedChars = Math.min(charsNeeded, SUBTITLE_FULL.length);
+                subtitleEl.textContent = SUBTITLE_FULL.slice(0, introState.typedChars);
+            }
+
+            /* subtitle: fade in at TYPE_START, then stay permanently */
+            let sAlpha = 0;
+            if (el >= TYPE_START) {
+                sAlpha = Math.min((el - TYPE_START) / 0.30, 1.0);
+            }
+
+            subtitleEl.style.color      = `rgba(255,248,253,${sAlpha})`;
+            subtitleEl.style.textShadow = [
+                `0 0 1px  rgba(0,0,0,${sAlpha})`,
+                `0 1px 4px rgba(0,0,0,${sAlpha})`,
+                `0 3px 12px rgba(2,0,8,${sAlpha * 0.98})`,
+                `0 0 18px rgba(200,80,230,${sAlpha * 0.38})`,
+            ].join(',');
+
+            /* mark done once fully visible and typing complete — show button */
+            if (alpha >= 1.0 && sAlpha >= 1.0 && introState.typedChars >= SUBTITLE_FULL.length) {
+                btnEl.style.opacity       = '1';
+                btnEl.style.pointerEvents = 'auto';
+                introState.done = true;
+            }
+        }
+
+        const glitchState = {
+            active:      false,
+            nextTrigger: 3.5 + Math.random() * 5,
+            startTime:   0,
+            duration:    0,
+        };
+
+        function updateGlitch(now) {
+            if (!glitchState.active && now > glitchState.nextTrigger) {
+                glitchState.active    = true;
+                glitchState.startTime = now;
+                glitchState.duration  = 0.28 + Math.random() * 0.44;
+                glitchState.nextTrigger = now + 3.5 + Math.random() * 8.0;
+            }
+            if (glitchState.active) {
+                const elapsed  = now - glitchState.startTime;
+                const t        = elapsed / glitchState.duration;
+                if (t >= 1.0) {
+                    glitchState.active = false;
+                    bgMat.uniforms.uGlitch.value = 0;
+                    bgMat.uniforms.uGlitchShake.value.set(0, 0);
+                } else {
+                    /* Envelope: ramp up → hold → ramp down */
+                    const env     = t < 0.15 ? t / 0.15 : t > 0.72 ? 1 - (t - 0.72) / 0.28 : 1.0;
+                    /* Rapid flicker within envelope */
+                    const flicker = Math.abs(Math.sin(now * 38.0 + Math.cos(now * 61.0))) * env;
+                    bgMat.uniforms.uGlitch.value = flicker;
+                    /* Screen shake: random offset each frame, scaled by flicker */
+                    const shk = flicker * 0.045;
+                    bgMat.uniforms.uGlitchShake.value.set(
+                        (Math.random() - 0.5) * shk,
+                        (Math.random() - 0.5) * shk * 0.5
+                    );
+                }
+            }
+        }
+
+        /* ── Pop state ── */
+        const popState = { active: false, startTime: 0 };
+
+        function triggerPop() {
+            if (popState.active) return;
+            popState.active    = true;
+            popState.startTime = clock.elapsedTime;
+            btnEl.style.opacity       = '0';
+            btnEl.style.pointerEvents = 'none';
+            /* white overlay fades in at 450 ms, navigate at 820 ms */
+            setTimeout(() => { flashEl.style.opacity = '1'; }, 450);
+            setTimeout(() => { window.location.href = 'nodes.html'; }, 820);
+        }
+
+        function updatePop(now) {
+            if (!popState.active) return;
+            bgMat.uniforms.uPop.value = Math.min((now - popState.startTime) / 0.50, 1.0);
+        }
+
+        btnEl.addEventListener('click', triggerPop);
+
         function animate() {
             requestAnimationFrame(animate);
             
             const deltaTime = clock.getDelta();
-            
+            const now       = clock.elapsedTime;
+            bgMat.uniforms.uTime.value = now;
+
             updateGlitchShapes(deltaTime);
-            
+            updateIntro(now);
+            updateGlitch(now);
+            updatePop(now);
+
+            renderer.clear();
+            renderer.render(bgScene, bgCamera);
+            renderer.clearDepth();
             renderer.render(scene, camera);
         }
         
@@ -503,6 +778,7 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            if (bgMat) bgMat.uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
         }
         
         // ============================================
@@ -512,11 +788,6 @@
         window.addEventListener('load', () => {
             initThreeJS();
             animate();
-            
-            // Show slider after 2 seconds
-            setTimeout(() => {
-                document.getElementById('slider-container').classList.add('visible');
-            }, 2000);
         });
     </script>
 </body>
